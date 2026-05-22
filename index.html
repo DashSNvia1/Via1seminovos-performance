@@ -362,6 +362,17 @@ td:last-child{border-right:none}
   </div>
 </div>
 
+<!-- AGING ESTOQUE PAGE -->
+<div id="pageAgingEstoque" style="display:none">
+  <div style="background:#fff;border-bottom:1px solid var(--border);padding:6px 20px;display:flex;align-items:center;gap:8px">
+    <span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Aba:</span>
+    <select class="sheet-select" id="agingEstoqueSheetSelect" onchange="loadAgingEstoqueSheet(this.value)" style="min-width:200px"></select>
+  </div>
+  <div style="padding:16px 20px 60px" id="aging-estoque-body">
+    <div style="padding:2rem;color:var(--muted)">Configure a URL da API de Estoque nas configurações (⚙) para carregar esta aba.</div>
+  </div>
+</div>
+
 <!-- PAGE TABS -->
 <div class="page-tabs" id="pageTabs">
   <div class="ptab active" id="ptVendas" data-page="vendas" draggable="true">Vendas por Modelo</div>
@@ -371,6 +382,7 @@ td:last-child{border-right:none}
   <div class="ptab" id="ptAval" data-page="aval" draggable="true">Tempo de Avaliação</div>
   <div class="ptab" id="ptAcomp" data-page="acomp" draggable="true">Acompanhamento de Vendas</div>
   <div class="ptab" id="ptEstoque" data-page="estoque" draggable="true">Estoque</div>
+  <div class="ptab" id="ptAgingEstoque" data-page="aging-estoque" draggable="true">Aging Estoque</div>
 </div>
 
 <script>
@@ -569,6 +581,7 @@ function switchPage(page) {
   document.getElementById('pageCritico').style.display = page==='critico'?'block':'none';
   const _pa=document.getElementById('pageAcomp');if(_pa)_pa.style.display=page==='acomp'?'block':'none';
   const _pe=document.getElementById('pageEstoque');if(_pe)_pe.style.display=page==='estoque'?'block':'none';
+  const _pae=document.getElementById('pageAgingEstoque');if(_pae)_pae.style.display=page==='aging-estoque'?'block':'none';
   document.getElementById('filterBar').style.display   = page==='vendas'&&document.getElementById('sheetSelect').options.length>0?'flex':'none';
   document.getElementById('avalFilterBar').style.display = isAval?'flex':'none';
   document.getElementById('ptVendas').classList.toggle('active', page==='vendas');
@@ -578,6 +591,8 @@ function switchPage(page) {
   document.getElementById('ptCritico').classList.toggle('active', page==='critico');
   const _pta=document.getElementById('ptAcomp');if(_pta)_pta.classList.toggle('active',page==='acomp');
   const _pte=document.getElementById('ptEstoque');if(_pte)_pte.classList.toggle('active',page==='estoque');
+  const _ptae=document.getElementById('ptAgingEstoque');if(_ptae)_ptae.classList.toggle('active',page==='aging-estoque');
+  if(page==='aging-estoque') initAgingEstoquePage();
   const dt = document.getElementById('avalDashType');
   if(dt) dt.value = page==='colab'?'colab':'geral';
   if(page==='aval' && !avalData) loadAval();
@@ -1127,22 +1142,20 @@ function renderAging() {
 
 // ── AGING VENDAS ──────────────────────────────────────────────────────────────
 function initAgingPage() {
-  // Populate aging sheet selector from vendas sheets (SHOWROOM only)
+  // Populate aging sheet selector from vendas sheets (SHOWROOM + REPASSE)
   const vendaSel = document.getElementById('sheetSelect');
   const agingSel = document.getElementById('agingSheetSelect');
   if(!agingSel || !vendaSel) return;
-  // Copy only SHOWROOM sheets
-  const opts = Array.from(vendaSel.options).filter(o=>o.value.toUpperCase().includes('SHOWROOM'));
-  if(!opts.length) {
-    // No filter if none have SHOWROOM in name
-    Array.from(vendaSel.options).forEach(o=>{ const n=document.createElement('option'); n.value=o.value; n.textContent=o.textContent; agingSel.appendChild(n); });
-  } else {
-    agingSel.innerHTML='';
-    opts.forEach(o=>{ const n=document.createElement('option'); n.value=o.value; n.textContent=o.textContent; agingSel.appendChild(n); });
-  }
-  // Load last selected or first
+  // Include SHOWROOM and REPASSE sheets
+  const opts = Array.from(vendaSel.options).filter(o=>
+    o.value.toUpperCase().includes('SHOWROOM') || o.value.toUpperCase().includes('REPASSE')
+  );
+  const source = opts.length ? opts : Array.from(vendaSel.options);
+  agingSel.innerHTML='';
+  source.forEach(o=>{ const n=document.createElement('option'); n.value=o.value; n.textContent=o.textContent; agingSel.appendChild(n); });
+  // Load last selected or match current
   const cur = vendaSel.value;
-  const match = opts.find(o=>o.value===cur)||opts[opts.length-1];
+  const match = source.find(o=>o.value===cur)||source[source.length-1];
   if(match) { agingSel.value=match.value; loadAgingSheet(match.value); }
 }
 
@@ -1214,7 +1227,7 @@ function renderAgingBody(allRows, sheetName) {
   window._agingRows = allRows;
   window._agingSheet = sheetName;
   if (!allRows.length) {
-    body.innerHTML = '<div class="no-data" style="padding:2rem">Sem dados SHOWROOM nesta aba</div>';
+    body.innerHTML = '<div class="no-data" style="padding:2rem">Sem dados nesta aba</div>';
     return;
   }
 
@@ -1414,7 +1427,15 @@ function renderAgingFaixaTable(tableId, faixa, fi, color, fmtN, fmtP, fmtC, pCol
       ${faixa.faixa} — ${faixa.qtd} vendas
     </div>
     <div class="tbl-wrap" style="border-radius:0 0 3px 3px">
-      <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <table style="width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed">
+        <colgroup>
+          <col style="width:50px">
+          <col>
+          <col style="width:90px">
+          <col style="width:110px">
+          <col style="width:110px">
+          <col style="width:90px">
+        </colgroup>
         <thead><tr>
           ${thFixed('',40,'center')}
           ${thA('Modelo','familia',tableId,'left')}
@@ -2187,8 +2208,10 @@ function initGiroPage() {
   const sel = document.getElementById('giroSheetSelect');
   const vendaSel = document.getElementById('sheetSelect');
   if(!sel || !vendaSel || sel.options.length > 1) return;
-  // Copy SHOWROOM sheets
-  const opts = Array.from(vendaSel.options).filter(o=>o.value.toUpperCase().includes('SHOWROOM'));
+  // Include SHOWROOM and REPASSE sheets
+  const opts = Array.from(vendaSel.options).filter(o=>
+    o.value.toUpperCase().includes('SHOWROOM') || o.value.toUpperCase().includes('REPASSE')
+  );
   const source = opts.length ? opts : Array.from(vendaSel.options);
   sel.innerHTML = source.map(o=>`<option value="${o.value}">${o.text}</option>`).join('');
   const cur = vendaSel.value;
@@ -3608,6 +3631,307 @@ function toggleEsqRow(id) {
   if(icon) icon.textContent = open ? '⊟' : '⊞';
 }
 // ─────────────────────────────────────────────────────────────────────────────
+
+// ── AGING ESTOQUE ─────────────────────────────────────────────────────────────
+// Reutiliza dados já carregados do Estoque (_estoqueRawRows)
+// A coluna K (index 10) é lida no Apps Script como header[10]
+// mas _estoqueRawRows já tem os dados parseados — precisamos do valorCompra via API direta
+
+let _agingEstoqueRawRows = [];
+let _agingEstoqueSelectedTipos = new Set();
+let _agingEstoqueAllTipos = [];
+let _agingEstoqueSelectedLojas = new Set();
+let _agingEstoqueAllLojas = [];
+
+function initAgingEstoquePage() {
+  if(!API_ESTOQUE) {
+    document.getElementById('aging-estoque-body').innerHTML=
+      '<div style="padding:2rem;color:var(--muted)">Configure a URL da API de Estoque nas configurações (⚙).</div>';
+    return;
+  }
+  const sel=document.getElementById('agingEstoqueSheetSelect');
+  if(!sel) return;
+  if(sel.options.length>1){ if(sel.value) loadAgingEstoqueSheet(sel.value); return; }
+  sel.innerHTML='<option>Carregando abas...</option>';
+  jsonp(API_ESTOQUE,{sheet:'__sheets__'}).then(data=>{
+    const sheets=data.sheets||[];
+    sel.innerHTML=sheets.map(s=>`<option value="${s}">${s}</option>`).join('');
+    if(sel.options.length){ sel.value=sel.options[0].value; loadAgingEstoqueSheet(sel.value); }
+  }).catch(()=>{ sel.innerHTML='<option>Erro ao carregar abas</option>'; });
+}
+
+async function loadAgingEstoqueSheet(name) {
+  const body=document.getElementById('aging-estoque-body');
+  body.innerHTML='<div style="padding:2rem;text-align:center;color:var(--muted)"><div class="spin2" style="margin:0 auto 8px"></div>Carregando...</div>';
+  try {
+    const data=await jsonp(API_ESTOQUE,{sheet:name});
+    if(data.error) throw new Error(data.error);
+    const headers=data.headers||[];
+    const diasCol  = headers[20]||'DiasEstoque';
+    const estoCol  = data.estoqueCol||headers[31]||'ESTOQUE';
+    const vcKey    = headers[10]||'Valor Compra'; // Coluna K
+
+    _agingEstoqueRawRows=(data.rows||[]).map(r=>({
+      modelo:      extractFamily(String(r['MODELO']||r['Modelo']||'').trim()),
+      modeloFull:  String(r['MODELO']||r['Modelo']||'').trim(),
+      loja:        String(r['EMPRESA']||r['Empresa']||'').trim().toUpperCase(),
+      placa:       String(r['PLACA']||r['Placa']||'').trim().toUpperCase(),
+      tipo:        String(r[estoCol]||'').trim(),
+      dias:        toNum(r[diasCol]||0),
+      km:          toNum(r['KM']||r['Km']||0),
+      valorCompra: toNum(r[vcKey]||0),
+    })).filter(r=>r.modelo);
+
+    _agingEstoqueAllTipos=[...new Set(_agingEstoqueRawRows.map(r=>r.tipo).filter(Boolean))].sort();
+    _agingEstoqueAllLojas=[...new Set(_agingEstoqueRawRows.map(r=>r.loja).filter(Boolean))].sort();
+    // Seleção padrão: tipos SHOWROOM/REPASSE
+    const defTipos=_agingEstoqueAllTipos.filter(t=>SHOWROOM_TIPOS.some(s=>t.includes(s.split(' - ')[0]))||t.includes('REPASSE'));
+    _agingEstoqueSelectedTipos=new Set(defTipos.length?defTipos:_agingEstoqueAllTipos);
+    _agingEstoqueSelectedLojas=new Set(_agingEstoqueAllLojas);
+
+    renderAgingEstoque();
+  } catch(e) {
+    body.innerHTML=`<div style="padding:2rem;color:var(--red)">Erro: ${e.message}</div>`;
+  }
+}
+
+function _getAgingEstoqueFiltered() {
+  return _agingEstoqueRawRows.filter(r=>
+    _agingEstoqueSelectedTipos.has(r.tipo) && _agingEstoqueSelectedLojas.has(r.loja)
+  );
+}
+
+function toggleAgingEstoqueTipo(tipo) {
+  if(_agingEstoqueSelectedTipos.has(tipo)) _agingEstoqueSelectedTipos.delete(tipo);
+  else _agingEstoqueSelectedTipos.add(tipo);
+  document.querySelectorAll('.ae-tipo-cb').forEach(cb=>{if(cb.dataset.tipo===tipo)cb.checked=_agingEstoqueSelectedTipos.has(tipo);});
+  _applyAgingEstoqueFilters();
+}
+function toggleAgingEstoqueLoja(loja) {
+  if(_agingEstoqueSelectedLojas.has(loja)) _agingEstoqueSelectedLojas.delete(loja);
+  else _agingEstoqueSelectedLojas.add(loja);
+  document.querySelectorAll('.ae-loja-cb').forEach(cb=>{if(cb.dataset.loja===loja)cb.checked=_agingEstoqueSelectedLojas.has(loja);});
+  _applyAgingEstoqueFilters();
+}
+function toggleTodasAgingEstoqueLojas(checked) {
+  document.querySelectorAll('.ae-loja-cb').forEach(cb=>{
+    cb.checked=checked;
+    if(checked)_agingEstoqueSelectedLojas.add(cb.dataset.loja);
+    else _agingEstoqueSelectedLojas.delete(cb.dataset.loja);
+  });
+  _applyAgingEstoqueFilters();
+}
+function toggleAeEstoqueDropdown(){const dd=document.getElementById('aeEstoqueDropdown');if(dd)dd.style.display=dd.style.display==='none'?'block':'none';}
+function toggleAeLojaDropdown(){const dd=document.getElementById('aeLojaDropdown');if(dd)dd.style.display=dd.style.display==='none'?'block':'none';}
+
+function _applyAgingEstoqueFilters() {
+  const lbE=document.getElementById('aeEstoqueLabel');
+  if(lbE)lbE.textContent=_agingEstoqueSelectedTipos.size===_agingEstoqueAllTipos.length?'Todos os estoques':`${_agingEstoqueSelectedTipos.size} selecionado${_agingEstoqueSelectedTipos.size>1?'s':''}`;
+  const lbL=document.getElementById('aeLojaLabel');
+  if(lbL)lbL.textContent=_agingEstoqueSelectedLojas.size===_agingEstoqueAllLojas.length?'Todas':`${_agingEstoqueSelectedLojas.size} selecionada${_agingEstoqueSelectedLojas.size>1?'s':''}`;
+  _renderAgingEstoqueContent(_getAgingEstoqueFiltered());
+}
+
+function renderAgingEstoque() {
+  const body=document.getElementById('aging-estoque-body'); if(!body) return;
+  const filtered=_getAgingEstoqueFiltered();
+
+  const labelTipos=_agingEstoqueSelectedTipos.size===_agingEstoqueAllTipos.length?'Todos os estoques':`${_agingEstoqueSelectedTipos.size} selecionado${_agingEstoqueSelectedTipos.size>1?'s':''}`;
+  const labelLojas=_agingEstoqueSelectedLojas.size===_agingEstoqueAllLojas.length?'Todas':`${_agingEstoqueSelectedLojas.size} selecionada${_agingEstoqueSelectedLojas.size>1?'s':''}`;
+
+  body.innerHTML=`
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">
+      <div id="aeEstoqueWrap" style="position:relative;display:inline-block">
+        <button onclick="toggleAeEstoqueDropdown()" style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--border);border-radius:3px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;min-width:220px;justify-content:space-between">
+          <span>Estoque</span><span id="aeEstoqueLabel" style="color:var(--muted);font-weight:400">${labelTipos}</span><span style="font-size:10px;color:var(--muted)">▼</span>
+        </button>
+        <div id="aeEstoqueDropdown" style="display:none;position:absolute;top:100%;left:0;z-index:999;background:#fff;border:1px solid var(--border);border-radius:3px;box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:300px;max-height:280px;overflow-y:auto;margin-top:2px">
+          <div style="padding:8px 12px;border-bottom:1px solid var(--border)"><span style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Seleções múltiplas</span></div>
+          ${_agingEstoqueAllTipos.map(t=>`<label style="display:flex;align-items:center;gap:10px;padding:8px 14px;cursor:pointer;border-bottom:1px solid #f5f4f0;font-size:12px" onmouseenter="this.style.background='#f5f4f0'" onmouseleave="this.style.background=''">
+            <input type="checkbox" class="ae-tipo-cb" data-tipo="${t}" ${_agingEstoqueSelectedTipos.has(t)?'checked':''} onchange="toggleAgingEstoqueTipo('${t.replace(/'/g,"\'")}')">
+            <span style="flex:1">${t}</span></label>`).join('')}
+        </div>
+      </div>
+      <div id="aeLojaWrap" style="position:relative;display:inline-block">
+        <button onclick="toggleAeLojaDropdown()" style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--border);border-radius:3px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;min-width:200px;justify-content:space-between">
+          <span>Por Loja</span><span id="aeLojaLabel" style="color:var(--muted);font-weight:400">${labelLojas}</span><span style="font-size:10px;color:var(--muted)">▼</span>
+        </button>
+        <div id="aeLojaDropdown" style="display:none;position:absolute;top:100%;left:0;z-index:999;background:#fff;border:1px solid var(--border);border-radius:3px;box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:280px;max-height:280px;overflow-y:auto;margin-top:2px">
+          <div style="padding:8px 12px;border-bottom:1px solid var(--border)"><span style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Seleções múltiplas</span></div>
+          <label style="display:flex;align-items:center;gap:10px;padding:8px 14px;cursor:pointer;border-bottom:1px solid #e0dfd8;font-size:12px;font-weight:600" onmouseenter="this.style.background='#f5f4f0'" onmouseleave="this.style.background=''">
+            <input type="checkbox" id="aeLojaAll" checked onchange="toggleTodasAgingEstoqueLojas(this.checked)"><span>Todas as lojas</span>
+          </label>
+          ${_agingEstoqueAllLojas.map(l=>`<label style="display:flex;align-items:center;gap:10px;padding:7px 14px;cursor:pointer;border-bottom:1px solid #f5f4f0;font-size:11px" onmouseenter="this.style.background='#f5f4f0'" onmouseleave="this.style.background=''">
+            <input type="checkbox" class="ae-loja-cb" data-loja="${l}" checked onchange="toggleAgingEstoqueLoja('${l.replace(/'/g,"\'")}')">
+            <span style="flex:1">${l}</span></label>`).join('')}
+        </div>
+      </div>
+    </div>
+    <div id="ae-content"></div>`;
+
+  // Fecha dropdowns ao clicar fora
+  setTimeout(()=>{
+    document.addEventListener('click', function _aecd(e){
+      ['aeEstoqueWrap','aeLojaWrap'].forEach(wid=>{
+        const w=document.getElementById(wid);
+        if(w&&!w.contains(e.target)){const dd=w.querySelector('div[id$="Dropdown"]');if(dd)dd.style.display='none';}
+      });
+    });
+  },100);
+
+  _renderAgingEstoqueContent(filtered);
+}
+
+function _renderAgingEstoqueContent(rows) {
+  const body=document.getElementById('ae-content'); if(!body) return;
+
+  const faixaOf = d => d<=30?'(1) < 30 dias':d<=60?'(2) 31 ~ 60 dias':d<=90?'(3) 61 ~ 90 dias':'(4) > 90 dias';
+  const FAIXAS=['(1) < 30 dias','(2) 31 ~ 60 dias','(3) 61 ~ 90 dias','(4) > 90 dias'];
+  const COLORS=['#2e7d32','#1565c0','#a0732a','#c62828'];
+  const faixaMap={};
+  FAIXAS.forEach(f=>{ faixaMap[f]={label:f,qtd:0,valorSum:0,kmSum:0,rows:[],mods:{}}; });
+
+  rows.forEach(r=>{
+    const f=faixaOf(r.dias);
+    const fm=faixaMap[f];
+    fm.qtd++; fm.valorSum+=r.valorCompra; fm.kmSum+=r.km; fm.rows.push(r);
+    if(!fm.mods[r.modelo]) fm.mods[r.modelo]={qtd:0,valorSum:0,kmSum:0,rows:[]};
+    fm.mods[r.modelo].qtd++; fm.mods[r.modelo].valorSum+=r.valorCompra;
+    fm.mods[r.modelo].kmSum+=r.km; fm.mods[r.modelo].rows.push(r);
+  });
+
+  const totQtd=rows.length;
+  const totValor=rows.reduce((s,r)=>s+r.valorCompra,0);
+  const totTKM=totQtd?totValor/totQtd:0;
+
+  const fmtV=v=>v>0?'R$ '+Math.round(v).toLocaleString('pt-BR'):'—';
+  const fmtN=v=>v>0?Math.round(v).toLocaleString('pt-BR'):'—';
+  const th='background:#1e1e1e;color:#fff;padding:9px 14px;font-size:10px;text-transform:uppercase;letter-spacing:.5px;font-weight:700;text-align:';
+
+  // Summary table
+  let html=`
+  <div style="margin-bottom:24px;border:1px solid var(--border);border-radius:3px;overflow:hidden">
+    <table style="width:100%;border-collapse:collapse;table-layout:fixed">
+      <colgroup><col style="width:40%"><col style="width:20%"><col style="width:20%"><col style="width:20%"></colgroup>
+      <thead><tr>
+        <th style="${th}left">Faixa Estoque</th>
+        <th style="${th}right">Total Estoque</th>
+        <th style="${th}right">Valor Compra</th>
+        <th style="${th}right">TKM Estoque</th>
+      </tr></thead>
+      <tbody>
+        ${FAIXAS.map((f,fi)=>{
+          const fm=faixaMap[f];
+          const tkm=fm.qtd?fm.valorSum/fm.qtd:0;
+          return `<tr style="background:${fi%2===0?'#fff':'#fafaf8'};border-bottom:1px solid var(--border)">
+            <td style="padding:9px 14px;font-weight:600">
+              <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${COLORS[fi]};margin-right:8px"></span>${f}
+            </td>
+            <td style="padding:9px 14px;text-align:right;font-weight:700">${fmtN(fm.qtd)}</td>
+            <td style="padding:9px 14px;text-align:right">${fmtV(fm.valorSum)}</td>
+            <td style="padding:9px 14px;text-align:right">${fmtV(tkm)}</td>
+          </tr>`;
+        }).join('')}
+        <tr style="background:#111;color:#fff">
+          <td style="padding:9px 14px;font-weight:700">Total</td>
+          <td style="padding:9px 14px;text-align:right;font-weight:700">${fmtN(totQtd)}</td>
+          <td style="padding:9px 14px;text-align:right;font-weight:700">${fmtV(totValor)}</td>
+          <td style="padding:9px 14px;text-align:right;font-weight:700">${fmtV(totTKM)}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>`;
+
+  // Detail faixa tables
+  FAIXAS.forEach((f,fi)=>{
+    const fm=faixaMap[f]; if(!fm.qtd) return;
+    const mods=Object.entries(fm.mods).sort((a,b)=>b[1].qtd-a[1].qtd);
+    const maxVol=mods.reduce((m,r)=>Math.max(m,r[1].qtd),1);
+    html+=`
+    <div style="margin-bottom:20px">
+      <div style="background:#1e1e1e;color:#fff;padding:8px 14px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;border-radius:3px 3px 0 0;display:flex;align-items:center;gap:8px">
+        <span style="width:8px;height:8px;border-radius:50%;background:${COLORS[fi]};display:inline-block"></span>
+        ${f} — ${fm.qtd} unidades
+      </div>
+      <div class="tbl-wrap" style="border-radius:0 0 3px 3px">
+        <table style="width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed">
+          <colgroup><col style="width:50px"><col><col style="width:90px"><col style="width:140px"><col style="width:120px"></colgroup>
+          <thead><tr style="background:#2a2a2a;color:#fff">
+            <th style="padding:8px 12px;text-align:center;font-size:10px;text-transform:uppercase;letter-spacing:.5px">#</th>
+            <th style="padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.5px">Modelo</th>
+            <th style="padding:8px 12px;text-align:center;font-size:10px;text-transform:uppercase;letter-spacing:.5px">Qtd.</th>
+            <th style="padding:8px 12px;text-align:right;font-size:10px;text-transform:uppercase;letter-spacing:.5px">Valor Compra</th>
+            <th style="padding:8px 12px;text-align:right;font-size:10px;text-transform:uppercase;letter-spacing:.5px">TKM</th>
+          </tr></thead>
+          <tbody>
+            ${mods.map(([mod,md],mi)=>{
+              const tkm=md.qtd?md.valorSum/md.qtd:0;
+              const bw=Math.round((md.qtd/maxVol)*80);
+              const detId=`ae_${fi}_${mi}`;
+              const detRows=md.rows.map((r,ri)=>`
+                <tr style="background:#f5f4f0;border-bottom:1px solid var(--border)">
+                  <td style="padding:5px 10px;text-align:center;color:var(--muted);font-size:11px">${ri+1}</td>
+                  <td style="padding:5px 10px;color:var(--muted);font-size:11px">${r.loja}</td>
+                  <td style="padding:5px 10px;color:var(--muted);font-size:11px">${r.placa||'—'}</td>
+                  <td style="padding:5px 10px;color:var(--muted);font-size:11px">${r.modeloFull}</td>
+                  <td style="padding:5px 10px;text-align:center;color:var(--muted);font-size:11px">${r.dias} dias</td>
+                  <td style="padding:5px 10px;text-align:right;color:var(--muted);font-size:11px">${r.km?r.km.toLocaleString('pt-BR')+'km':'—'}</td>
+                  <td style="padding:5px 10px;text-align:right;color:var(--muted);font-size:11px">${fmtV(r.valorCompra)}</td>
+                </tr>`).join('');
+              return `
+              <tr style="background:${mi%2===0?'#fafaf8':'#fff'};border-bottom:1px solid var(--border);cursor:pointer" onclick="toggleAgingEstoqueDetail('${detId}',this)">
+                <td style="padding:7px 12px;text-align:center">
+                  <span id="ae_eb_${detId}" style="font-size:11px;color:#888">⊞</span>
+                  <span style="font-weight:700;color:${mi===0?'#c8921a':mi===1?'#9ba0a8':mi===2?'#b87f5a':'#bbb'};font-size:11px;margin-left:4px">${mi+1}</span>
+                </td>
+                <td style="padding:7px 12px;font-weight:600">
+                  <div style="display:flex;align-items:center;gap:10px">
+                    ${mod.charAt(0)+mod.slice(1).toLowerCase()}
+                    <div style="background:#e8e7e0;border-radius:2px;height:5px;width:80px;overflow:hidden;flex-shrink:0">
+                      <div style="width:${bw}px;background:${COLORS[fi]};height:100%;border-radius:2px"></div>
+                    </div>
+                    <span style="font-weight:700;font-size:12px;color:var(--ink)">${md.qtd}</span>
+                  </div>
+                </td>
+                <td style="padding:7px 12px;text-align:center;font-weight:700">${md.qtd}</td>
+                <td style="padding:7px 12px;text-align:right">${fmtV(md.valorSum)}</td>
+                <td style="padding:7px 12px;text-align:right">${fmtV(tkm)}</td>
+              </tr>
+              <tr id="ae_det_${detId}" style="display:none">
+                <td colspan="5" style="padding:0;background:#f5f4f0">
+                  <table style="width:100%;border-collapse:collapse;font-size:11px">
+                    <thead><tr style="background:#e0dfd8">
+                      <th style="padding:5px 10px;text-align:center">#</th>
+                      <th style="padding:5px 10px;text-align:left">Loja</th>
+                      <th style="padding:5px 10px;text-align:left">Placa</th>
+                      <th style="padding:5px 10px;text-align:left">Modelo</th>
+                      <th style="padding:5px 10px;text-align:center">Dias</th>
+                      <th style="padding:5px 10px;text-align:right">KM</th>
+                      <th style="padding:5px 10px;text-align:right">Valor Compra</th>
+                    </tr></thead>
+                    <tbody>${detRows}</tbody>
+                  </table>
+                </td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+  });
+
+  body.innerHTML=html;
+}
+
+function toggleAgingEstoqueDetail(id, row) {
+  const det=document.getElementById('ae_det_'+id);
+  const icon=document.getElementById('ae_eb_'+id);
+  if(!det) return;
+  const open=det.style.display==='none'||det.style.display==='';
+  det.style.display=open?'table-row':'none';
+  if(icon) icon.textContent=open?'⊟':'⊞';
+}
+
 </script>
 </body>
 </html>
