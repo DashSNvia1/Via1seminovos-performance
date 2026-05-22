@@ -669,7 +669,7 @@ async function loadSheet(name) {
       return {
         loja, familia:extractFamily(r['MODELO']||r[' ']||''),
         vendas:toNum(r['( = ) Total']), margem:toNum(r['% Margem']),
-        pago:toNum(r['%PAGO']), fipe:toNum(r['% VENDA FIPE VENDA']),
+        pago:toNum(r['%PAGO']), fipe:toNum(r['% VENDA FIPE VENDA']||r['% VENDA FIPE']||r['%FIPE']||r['FIPE']),
         tkm:toNum(r['TKM']),
         modelo:String(r['MODELO']||r[' ']||'').trim(),
         placa:String(r['PLACA']||'').trim(),
@@ -862,7 +862,7 @@ function colDrop(e,type,targetIdx,tableId){
   if(_dragColType!==type || _dragColIdx===targetIdx) return;
   const storageKey = type==='main'?'v1_colOrder_main':'v1_colOrder_detail';
   const allMain=['familia','vendas','dias','tkm','margemRS','margem','pago','fipe'];
-  const allDet=['placa','modelo','loja','ano','km','diasEstoque','margem','margemRS','pago','totalRecebido'];
+  const allDet=['placa','modelo','loja','ano','km','diasEstoque','margem','margemRS','pago','fipe','totalRecebido'];
   const allKeys = type==='main'?allMain:allDet;
   let order;
   try{ order=JSON.parse(localStorage.getItem(storageKey))||allKeys; }catch(e){ order=[...allKeys]; }
@@ -911,7 +911,7 @@ function buildDetailTable(rows,did) {
     {k:'placa',l:'Placa'},{k:'modelo',l:'Modelo'},{k:'loja',l:'Loja'},
     {k:'ano',l:'Ano',r:true},{k:'km',l:'KM',r:true},{k:'diasEstoque',l:'Dias Est.',r:true},
     {k:'margem',l:'% Margem',r:true},{k:'margemRS',l:'Margem R$',r:true},
-    {k:'pago',l:'% Pago',r:true},{k:'totalRecebido',l:'Total Rec.',r:true},
+    {k:'pago',l:'% Pago',r:true},{k:'fipe',l:'% Venda FIPE',r:true},{k:'totalRecebido',l:'Total Rec.',r:true},
   ];
   // Aplica ordem salva
   const savedDet=localStorage.getItem('v1_colOrder_detail');
@@ -939,6 +939,7 @@ function buildDetailTable(rows,did) {
       if(c.k==='margem')        return `<td class="r" style="color:${r.margem>=0.07?'var(--green)':r.margem>=0.04?'var(--amber)':'var(--red)'};font-weight:600">${(r.margem*100).toFixed(2)}%</td>`;
       if(c.k==='margemRS')      return `<td class="r">R$ ${r.margemRS?r.margemRS.toLocaleString('pt-BR',{minimumFractionDigits:0}):'—'}</td>`;
       if(c.k==='pago')          return `<td class="r">${(r.pago*100).toFixed(1)}%</td>`;
+      if(c.k==='fipe')          return `<td class="r">${r.fipe>0?(r.fipe*100).toFixed(1)+'%':'—'}</td>`;
       if(c.k==='totalRecebido') return `<td class="r">R$ ${r.totalRecebido.toLocaleString('pt-BR',{minimumFractionDigits:0})}</td>`;
       return '<td>—</td>';
     }).join('');
@@ -2685,33 +2686,50 @@ function _renderCriticoCharts(filtered) {
 function _buildCriticoLojaTable(rows) {
   const el=document.getElementById('criticoTabLoja');if(!el)return;
   const th='background:#1e1e1e;color:#fff;padding:8px 12px;font-size:10px;text-transform:uppercase;letter-spacing:.5px;font-weight:700;text-align:';
+  const CW='width:100%;border-collapse:collapse;table-layout:fixed';
+  const C1='width:55%',C2='width:15%',C3='width:15%',C4='width:15%';
   const map={};
   rows.forEach(r=>{
-    if(!map[r.loja])map[r.loja]={qtd:0,modelos:{}};
+    if(!map[r.loja])map[r.loja]={qtd:0,vof:0,modelos:{}};
     map[r.loja].qtd++;
-    if(!map[r.loja].modelos[r.modelo])map[r.loja].modelos[r.modelo]={qtd:0,placas:[]};
+    const isVof=r.tipo&&r.tipo.toUpperCase().includes('VOF');
+    if(isVof)map[r.loja].vof++;
+    if(!map[r.loja].modelos[r.modelo])map[r.loja].modelos[r.modelo]={qtd:0,vof:0,placas:[]};
     map[r.loja].modelos[r.modelo].qtd++;
+    if(isVof)map[r.loja].modelos[r.modelo].vof++;
     if(r.placa)map[r.loja].modelos[r.modelo].placas.push(r.placa+' ('+r.dias+'d)');
   });
-  let h=`<table style="width:100%;border-collapse:collapse"><thead><tr>
-    <th style="${th}left">Loja</th><th style="${th}right">Qtd.</th>
-  </tr></thead><tbody>`;
+  let h=`<table style="${CW}"><colgroup><col style="${C1}"><col style="${C2}"><col style="${C3}"><col style="${C4}"></colgroup>
+    <thead><tr>
+      <th style="${th}left">Loja</th>
+      <th style="${th}right">Qtd.</th>
+      <th style="${th}right">VOF</th>
+      <th style="${th}right">% VOF</th>
+    </tr></thead><tbody>`;
   Object.entries(map).sort((a,b)=>b[1].qtd-a[1].qtd).forEach(([loja,ld],li)=>{
     const lid=`crit_l_${li}`;
+    const pct=ld.qtd?((ld.vof/ld.qtd)*100).toFixed(1)+'%':'—';
+    const col=ld.qtd&&(ld.vof/ld.qtd)>0.20?'var(--red)':ld.vof>0?'var(--green)':'var(--muted)';
     h+=`<tr style="background:${li%2===0?'#fff':'#fafaf8'};border-bottom:1px solid var(--border);cursor:pointer" onclick="toggleEsqRow('${lid}')">
       <td style="padding:5px 10px;font-weight:600"><span id="${lid}_icon" style="font-size:10px;margin-right:5px;color:var(--muted)">⊞</span>${loja}</td>
       <td style="padding:5px 10px;text-align:right;font-weight:700">${ld.qtd}</td>
-    </tr><tr id="${lid}" style="display:none"><td colspan="2" style="padding:0">
-      <table style="width:100%;border-collapse:collapse;background:#f5f4f0">`;
+      <td style="padding:5px 10px;text-align:right;color:var(--muted)">${ld.vof||'—'}</td>
+      <td style="padding:5px 10px;text-align:right;color:${col};font-weight:${ld.vof>0?'600':'400'}">${pct}</td>
+    </tr><tr id="${lid}" style="display:none"><td colspan="4" style="padding:0">
+      <table style="${CW};background:#f5f4f0"><colgroup><col style="${C1}"><col style="${C2}"><col style="${C3}"><col style="${C4}"></colgroup>`;
     Object.entries(ld.modelos).sort((a,b)=>b[1].qtd-a[1].qtd).forEach(([mod,md],mi)=>{
       const mid=`crit_m_${li}_${mi}`;
+      const mpct=md.qtd?((md.vof/md.qtd)*100).toFixed(1)+'%':'—';
+      const mcol=md.qtd&&(md.vof/md.qtd)>0.20?'var(--red)':md.vof>0?'var(--green)':'var(--muted)';
       h+=`<tr style="border-bottom:1px solid #e8e7e2;cursor:pointer" onclick="toggleEsqRow('${mid}')">
         <td style="padding:4px 10px 4px 26px"><span id="${mid}_icon" style="font-size:9px;margin-right:5px;color:var(--muted)">⊞</span>${mod}</td>
         <td style="padding:4px 10px;text-align:right;font-weight:600">${md.qtd}</td>
-      </tr><tr id="${mid}" style="display:none"><td colspan="2" style="padding:0">
-        <table style="width:100%;border-collapse:collapse;background:#eaeae4">`;
+        <td style="padding:4px 10px;text-align:right;color:var(--muted)">${md.vof||'—'}</td>
+        <td style="padding:4px 10px;text-align:right;color:${mcol};font-weight:${md.vof>0?'600':'400'}">${mpct}</td>
+      </tr><tr id="${mid}" style="display:none"><td colspan="4" style="padding:0">
+        <table style="${CW};background:#eaeae4"><colgroup><col style="${C1}"><col style="${C2}"><col style="${C3}"><col style="${C4}"></colgroup>`;
       (md.placas.length?md.placas:['—']).forEach(p=>{
-        h+=`<tr style="border-bottom:1px solid #e0dfd8"><td style="padding:3px 10px 3px 44px;color:var(--muted);font-size:11px">${p}</td><td></td></tr>`;
+        h+=`<tr style="border-bottom:1px solid #e0dfd8"><td style="padding:3px 10px 3px 44px;color:var(--muted);font-size:11px">${p}</td><td colspan="3"></td></tr>`;
       });
       h+=`</table></td></tr>`;
     });
