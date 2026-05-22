@@ -236,9 +236,24 @@ td:last-child{border-right:none}
   </div>
   <div style="margin-left:12px">
     <div class="filter-label">Operação</div>
-    <select class="sheet-select" id="vendaLojaSelect" onchange="filterVendasByLoja(this.value)" style="min-width:220px">
-      <option value="">Todas as lojas</option>
-    </select>
+    <div id="vendaLojaWrap" style="position:relative;display:inline-block">
+      <button onclick="toggleVendaLojaDropdown()" style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--border2);border-radius:3px;padding:6px 14px;font-size:11px;font-weight:600;cursor:pointer;min-width:220px;justify-content:space-between">
+        <span>Operação</span>
+        <span id="vendaLojaLabel" style="color:var(--muted);font-weight:400">Todas as lojas</span>
+        <span style="font-size:9px;color:var(--muted)">▼</span>
+      </button>
+      <div id="vendaLojaDropdown" style="display:none;position:absolute;top:100%;left:0;z-index:999;background:#fff;border:1px solid var(--border);border-radius:3px;box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:280px;max-height:320px;overflow-y:auto;margin-top:2px">
+        <div style="padding:8px 12px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between">
+          <span style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Seleções múltiplas</span>
+          <span onclick="toggleVendaLojaDropdown()" style="cursor:pointer;font-size:16px;color:var(--muted);line-height:1">∧</span>
+        </div>
+        <label style="display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;border-bottom:1px solid #e0dfd8;font-size:12px;font-weight:600" onmouseenter="this.style.background='#f5f4f0'" onmouseleave="this.style.background=''">
+          <input type="checkbox" id="vendaLojaAll" checked onchange="toggleTodasVendaLojas(this.checked)">
+          <span>Todas as lojas</span>
+        </label>
+        <div id="vendaLojaItems"></div>
+      </div>
+    </div>
   </div>
   <span id="f-mes" style="display:none"></span>
   <span id="f-ano" style="display:none"></span>
@@ -704,10 +719,21 @@ async function loadSheet(name) {
     store.geral=aggregate(base); store.bace=aggregate(baceRows); store.pepb=aggregate(pepbRows);
     rawRows.geral=base; rawRows.bace=baceRows; rawRows.pepb=pepbRows;
     // Populate loja selector
-    const lojasSel=document.getElementById('vendaLojaSelect');
+    const lojasSel=document.getElementById('vendaLojaItems');
     if(lojasSel){
       const allLojas=[...new Set(base.map(r=>r.loja).filter(Boolean))].sort();
-      lojasSel.innerHTML='<option value="">Todas as lojas</option>'+allLojas.map(l=>`<option value="${l}">${l}</option>`).join('');
+      window._vendaAllLojas = allLojas;
+      window._vendaSelectedLojas = new Set(allLojas);
+      lojasSel.innerHTML = allLojas.map(l => {
+        const reg = BA_CE.some(b=>l.toUpperCase().includes(b.toUpperCase()))
+          ? '<span style="font-size:9px;background:#e8f5ee;color:var(--green);border-radius:2px;padding:1px 4px;margin-left:6px">BA/CE</span>'
+          : PE_PB.some(p=>l.toUpperCase().includes(p.toUpperCase()))
+          ? '<span style="font-size:9px;background:#e8f0fd;color:#1a3c8a;border-radius:2px;padding:1px 4px;margin-left:6px">PE/PB</span>' : '';
+        return `<label style="display:flex;align-items:center;gap:10px;padding:8px 14px;cursor:pointer;border-bottom:1px solid #f5f4f0;font-size:11px" onmouseenter="this.style.background='#f5f4f0'" onmouseleave="this.style.background=''">
+          <input type="checkbox" class="venda-loja-cb" data-loja="${l}" checked onchange="onVendaLojaCbChange()">
+          <span style="flex:1">${l}</span>${reg}
+        </label>`;
+      }).join('');
     }
 
     // Guess month/year
@@ -1637,6 +1663,55 @@ function exportAgingCSV() {
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
   a.download = 'Aging_Vendas.csv'; a.click();
 }
+
+function toggleVendaLojaDropdown() {
+  const dd = document.getElementById('vendaLojaDropdown');
+  if(dd) dd.style.display = dd.style.display==='none' ? 'block' : 'none';
+}
+
+function toggleTodasVendaLojas(checked) {
+  document.querySelectorAll('.venda-loja-cb').forEach(cb => cb.checked = checked);
+  window._vendaSelectedLojas = checked ? new Set(window._vendaAllLojas||[]) : new Set();
+  _updateVendaLojaLabel();
+  _applyVendaLojaFilter();
+}
+
+function onVendaLojaCbChange() {
+  const all = window._vendaAllLojas||[];
+  const sel = new Set([...document.querySelectorAll('.venda-loja-cb:checked')].map(cb=>cb.dataset.loja));
+  window._vendaSelectedLojas = sel;
+  const allCb = document.getElementById('vendaLojaAll');
+  if(allCb) allCb.checked = sel.size === all.length;
+  _updateVendaLojaLabel();
+  _applyVendaLojaFilter();
+}
+
+function _updateVendaLojaLabel() {
+  const all = window._vendaAllLojas||[];
+  const sel = window._vendaSelectedLojas||new Set(all);
+  const lbl = document.getElementById('vendaLojaLabel');
+  if(lbl) lbl.textContent = sel.size===all.length ? 'Todas as lojas' : `${sel.size} selecionada${sel.size>1?'s':''}`;
+}
+
+function _applyVendaLojaFilter() {
+  const all = window._allVendaRows;
+  if(!all) return;
+  const sel = window._vendaSelectedLojas;
+  const filterFn = r => !sel || sel.size===0 || sel.has(r.loja);
+  const geralF=all.geral.filter(filterFn), baceF=all.bace.filter(filterFn), pepbF=all.pepb.filter(filterFn);
+  store.geral=aggregate(geralF); store.bace=aggregate(baceF); store.pepb=aggregate(pepbF);
+  rawRows.geral=geralF; rawRows.bace=baceF; rawRows.pepb=pepbF;
+  renderVendasTable('geral'); renderVendasTable('bace'); renderVendasTable('pepb');
+}
+
+// Fecha dropdown ao clicar fora
+document.addEventListener('click', function(e) {
+  const wrap = document.getElementById('vendaLojaWrap');
+  if(wrap && !wrap.contains(e.target)) {
+    const dd = document.getElementById('vendaLojaDropdown');
+    if(dd) dd.style.display = 'none';
+  }
+});
 
 function filterVendasByLoja(loja) {
   const all = window._allVendaRows;
