@@ -222,6 +222,15 @@ td:last-child{border-right:none}
       </div>
       <div class="config-status" id="st-estoque"></div>
     </div>
+    <div>
+      <div class="config-box-title">🔧 Oficina - Produtivo</div>
+      <div class="config-row">
+        <input class="config-input" id="apiUrl5" type="text" placeholder="https://script.google.com/...">
+        <button class="btn-save" onclick="saveURL('oficina')">Salvar</button>
+        <button class="btn-clear" onclick="clearURL('oficina')">✕</button>
+      </div>
+      <div class="config-status" id="st-oficina"></div>
+    </div>
   </div>
   <div class="config-hint">
     Cole a URL do Web App do Apps Script em cada campo e clique Salvar. As URLs ficam salvas no navegador.
@@ -284,6 +293,22 @@ td:last-child{border-right:none}
 
   </div>
   <div class="content" id="contentVendas" style="display:none">
+    <!-- BUSCA POR PLACAS -->
+    <div id="placa-search-panel" style="background:#fff;border:1px solid var(--border);border-radius:3px;padding:14px 16px;margin-bottom:16px">
+      <div style="display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap">
+        <div style="flex:1;min-width:200px">
+          <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);display:block;margin-bottom:6px">🔍 Buscar por Placas</label>
+          <textarea id="placa-search-input" placeholder="Cole as placas aqui, uma por linha&#10;Ex:&#10;SLR7D99&#10;RIK6H62&#10;ORP2C32"
+            style="width:100%;height:80px;border:1px solid var(--border2);border-radius:3px;padding:7px 10px;font-size:11px;font-family:monospace;resize:vertical"></textarea>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px;padding-top:20px">
+          <button onclick="buscarPlacas()" style="background:#1e1e1e;color:#fff;border:none;padding:8px 16px;border-radius:3px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">🔍 Buscar</button>
+          <button onclick="limparBuscaPlacas()" style="background:#fff;color:var(--ink);border:1px solid var(--border);padding:8px 16px;border-radius:3px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">✕ Limpar</button>
+          <button onclick="exportarPlacasExcel()" id="btn-export-placas" style="display:none;background:var(--green);color:#fff;border:none;padding:8px 16px;border-radius:3px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">⬇ Exportar Excel</button>
+        </div>
+      </div>
+      <div id="placa-search-result" style="margin-top:12px"></div>
+    </div>
     <div id="panel-geral" class="panel active">
       <div class="drill-bar"><div class="drill-label">Todas as regionais</div><button class="export-btn" onclick="exportCSV('geral')">⬇ CSV</button></div>
       <div class="tbl-wrap"><table id="tbl-geral"></table></div>
@@ -388,6 +413,32 @@ td:last-child{border-right:none}
   </div>
 </div>
 
+<!-- OFICINA PAGE -->
+<div id="pageOficina" style="display:none">
+  <div style="background:#fff;border-bottom:1px solid var(--border);padding:6px 20px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+    <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Aba:</span>
+    <select class="sheet-select" id="oficina-sheet-sel" onchange="loadOficinaSheet(this.value)" style="min-width:160px"></select>
+    <div style="display:flex;align-items:center;gap:6px;margin-left:8px">
+      <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Dias úteis:</label>
+      <input type="number" id="oficina-dias-uteis" value="22" min="1" max="31"
+        onchange="renderOficina()"
+        style="width:52px;border:1px solid var(--border2);border-radius:3px;padding:5px 6px;font-size:12px;font-weight:700;text-align:center">
+    </div>
+    <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+      <label style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Empresa:</label>
+      <select id="oficina-empresa-sel" onchange="renderOficina()" style="background:#fff;border:1px solid var(--border2);padding:5px 10px;border-radius:3px;font-size:11px;min-width:240px">
+        <option value="">Todas as empresas</option>
+      </select>
+    </div>
+  </div>
+  <div style="padding:16px 20px 60px">
+    <div id="oficina-kpis" style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap"></div>
+    <div id="oficina-table" style="overflow-x:auto;border:1px solid var(--border);border-radius:3px">
+      <div style="padding:3rem;text-align:center;color:var(--muted)">🔧 Carregando...</div>
+    </div>
+  </div>
+</div>
+
 <!-- PAGE TABS -->
 <div class="page-tabs" id="pageTabs">
   <div class="ptab active" id="ptVendas" data-page="vendas" draggable="true">Vendas por Modelo</div>
@@ -398,10 +449,17 @@ td:last-child{border-right:none}
   <div class="ptab" id="ptAcomp" data-page="acomp" draggable="true">Acompanhamento de Vendas</div>
   <div class="ptab" id="ptEstoque" data-page="estoque" draggable="true">Estoque</div>
   <div class="ptab" id="ptAgingEstoque" data-page="aging-estoque" draggable="true">Aging Estoque</div>
+  <div class="ptab" id="ptOficina" data-page="oficina" draggable="true">Oficina</div>
 </div>
 
 <script>
 // ── CONSTANTS ─────────────────────────────────────────────────────────────────
+// ── SAFE localStorage (works on file:// and GitHub Pages) ────────────────────
+function _ls(k,d)   { try{ var v=localStorage.getItem(k); return (v!==null&&v!=='')?v:d; }catch(e){ return d; } }
+function _lsSet(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
+function _lsRm(k)   { try{ localStorage.removeItem(k); }catch(e){} }
+// ─────────────────────────────────────────────────────────────────────────────
+
 const URL_VENDAS = 'https://script.google.com/macros/s/AKfycbx2r_KKZs0_1prkqscf-80Ggggnt25ettxvI8GlYMy-IvXjRidcfOkDOgjyOsMvgpah_Q/exec';
 const URL_AVAL   = 'https://script.google.com/macros/s/AKfycbyZFbIpc-yu7MLWYDttVYi96f2r8vvMAxHjAh0yDN45EgYF9q0mlo8V36PSV-T4uJazUw/exec';
 
@@ -411,7 +469,7 @@ const URL_AVAL   = 'https://script.google.com/macros/s/AKfycbyZFbIpc-yu7MLWYDttV
   if(!container) return;
 
   // Restore saved order
-  const saved = localStorage.getItem('v1_tabOrder');
+  const saved = _ls('v1_tabOrder','');
   if(saved) {
     try {
       const order = JSON.parse(saved);
@@ -439,7 +497,7 @@ const URL_AVAL   = 'https://script.google.com/macros/s/AKfycbyZFbIpc-yu7MLWYDttV
     container.querySelectorAll('.ptab').forEach(el=>el.classList.remove('drag-over'));
     // Save order
     const order = [...container.querySelectorAll('.ptab')].map(el=>el.dataset.page);
-    localStorage.setItem('v1_tabOrder', JSON.stringify(order));
+    _lsSet('v1_tabOrder', JSON.stringify(order));
   });
   container.addEventListener('dragover', e => {
     e.preventDefault();
@@ -510,11 +568,15 @@ const COLAB_COLORS = {
   'Antonio e Luis':     {bg:'#6a1a7a',light:'#f5e8fd'}
 };
 
+// ── SAFE localStorage WRAPPER (works on file:// too) ─────────────────────────
+// (declared at top of script — see above)
+
 // ── STATE ─────────────────────────────────────────────────────────────────────
-let API_VENDAS  = localStorage.getItem('v1_vendas')  || URL_VENDAS;
-let API_AVAL    = localStorage.getItem('v1_aval')    || URL_AVAL;
-let API_ACOMP   = localStorage.getItem('v1_acomp')   || 'https://script.google.com/macros/s/AKfycbwi67zRTahAD7b_KbqIrH9d1g0FKETD5Ui-o4azwDL64W3Wdoo7NfmmIYyIy7wOh1SCuA/exec';
-let API_ESTOQUE = localStorage.getItem('v1_estoque') || 'https://script.google.com/macros/s/AKfycbzO8yYahoKvXi4LjVFOGzDciDkO2EDmqu605nuHmfdFZkswSLSrnJcm7MaLotbK5s-J/exec';
+let API_VENDAS  = _ls('v1_vendas',  URL_VENDAS);
+let API_AVAL    = _ls('v1_aval',    URL_AVAL);
+let API_ACOMP   = _ls('v1_acomp',   'https://script.google.com/macros/s/AKfycbwi67zRTahAD7b_KbqIrH9d1g0FKETD5Ui-o4azwDL64W3Wdoo7NfmmIYyIy7wOh1SCuA/exec');
+let API_ESTOQUE = _ls('v1_estoque', 'https://script.google.com/macros/s/AKfycbzO8yYahoKvXi4LjVFOGzDciDkO2EDmqu605nuHmfdFZkswSLSrnJcm7MaLotbK5s-J/exec');
+let API_OFICINA = _ls('v1_oficina', 'https://script.google.com/macros/s/AKfycbxHt2EkEo7bIS04wb0lJLH_HfQ1tB84HWeghAMOrg2ogyCtyKH9KjU67lSLnN-xxXKt/exec');
 let store = {geral:[],bace:[],pepb:[]};
 let rawRows = {geral:[],bace:[],pepb:[]};
 let avalData = null;
@@ -530,10 +592,12 @@ window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('apiUrl2').value = API_AVAL;
   document.getElementById('apiUrl3').value = API_ACOMP   || '';
   document.getElementById('apiUrl4').value = API_ESTOQUE || '';
+  document.getElementById('apiUrl5').value = API_OFICINA || '';
   if(API_VENDAS)  { document.getElementById('st-vendas').textContent='✓ Configurado';  document.getElementById('st-vendas').style.color='var(--green)'; }
   if(API_AVAL)    { document.getElementById('st-aval').textContent='✓ Configurado';    document.getElementById('st-aval').style.color='var(--green)'; }
   if(API_ACOMP)   { document.getElementById('st-acomp').textContent='✓ Configurado';   document.getElementById('st-acomp').style.color='var(--green)'; }
   if(API_ESTOQUE) { document.getElementById('st-estoque').textContent='✓ Configurado'; document.getElementById('st-estoque').style.color='var(--green)'; }
+  if(API_OFICINA) { document.getElementById('st-oficina').textContent='✓ Configurado'; document.getElementById('st-oficina').style.color='var(--green)'; }
   loadVendas();
 });
 
@@ -554,32 +618,45 @@ function jsonp(baseUrl, params) {
 // ── CONFIG ────────────────────────────────────────────────────────────────────
 function toggleConfig() { document.getElementById('configPanel').style.display = document.getElementById('configPanel').style.display==='block'?'none':'block'; }
 function saveURL(which) {
-  const id   = which==='vendas'?'apiUrl': which==='aval'?'apiUrl2': which==='acomp'?'apiUrl3':'apiUrl4';
-  const key  = which==='vendas'?'v1_vendas': which==='aval'?'v1_aval': which==='acomp'?'v1_acomp':'v1_estoque';
-  const stId = which==='vendas'?'st-vendas': which==='aval'?'st-aval': which==='acomp'?'st-acomp':'st-estoque';
+  const id   = which==='vendas'?'apiUrl': which==='aval'?'apiUrl2': which==='acomp'?'apiUrl3': which==='estoque'?'apiUrl4':'apiUrl5';
+  const key  = which==='vendas'?'v1_vendas': which==='aval'?'v1_aval': which==='acomp'?'v1_acomp': which==='estoque'?'v1_estoque':'v1_oficina';
+  const stId = which==='vendas'?'st-vendas': which==='aval'?'st-aval': which==='acomp'?'st-acomp': which==='estoque'?'st-estoque':'st-oficina';
   const val  = document.getElementById(id).value.trim();
   if(!val) return alert('Cole a URL do Apps Script');
-  if(which==='vendas')        { API_VENDAS=val;  localStorage.setItem(key,val); }
-  else if(which==='aval')     { API_AVAL=val;    localStorage.setItem(key,val); }
-  else if(which==='acomp')    { API_ACOMP=val;   localStorage.setItem(key,val); }
-  else                        { API_ESTOQUE=val; localStorage.setItem(key,val); }
+  if(which==='vendas')        { API_VENDAS=val;  _lsSet(key,val); }
+  else if(which==='aval')     { API_AVAL=val;    _lsSet(key,val); }
+  else if(which==='acomp')    { API_ACOMP=val;   _lsSet(key,val); }
+  else if(which==='estoque')  { API_ESTOQUE=val; _lsSet(key,val); }
+  else                        { API_OFICINA=val; _lsSet(key,val); }
   const st = document.getElementById(stId);
   st.textContent='✓ Salvo'; st.style.color='var(--green)';
   toggleConfig();
   if(which==='vendas') loadVendas();
   else if(which==='aval') { avalData=null; loadAval(); }
   else if(which==='acomp' && typeof loadAcomp==='function') loadAcomp();
-  else if(which==='estoque' && typeof loadEstoque==='function') loadEstoque();
+  else if(which==='estoque') {
+    const sel1 = document.getElementById('estoqueSheetSelect');
+    const sel2 = document.getElementById('agingEstoqueSheetSelect');
+    if(sel1) sel1.innerHTML = '';
+    if(sel2) sel2.innerHTML = '';
+    initEstoquePage();
+    if(typeof initAgingEstoquePage === 'function') initAgingEstoquePage();
+  } else if(which==='oficina') {
+    const sel = document.getElementById('oficina-sheet-sel');
+    if(sel) sel.innerHTML = '';
+    initOficinaPage();
+  }
 }
 function clearURL(which) {
-  const id   = which==='vendas'?'apiUrl': which==='aval'?'apiUrl2': which==='acomp'?'apiUrl3':'apiUrl4';
-  const key  = which==='vendas'?'v1_vendas': which==='aval'?'v1_aval': which==='acomp'?'v1_acomp':'v1_estoque';
-  const stId = which==='vendas'?'st-vendas': which==='aval'?'st-aval': which==='acomp'?'st-acomp':'st-estoque';
+  const id   = which==='vendas'?'apiUrl': which==='aval'?'apiUrl2': which==='acomp'?'apiUrl3': which==='estoque'?'apiUrl4':'apiUrl5';
+  const key  = which==='vendas'?'v1_vendas': which==='aval'?'v1_aval': which==='acomp'?'v1_acomp': which==='estoque'?'v1_estoque':'v1_oficina';
+  const stId = which==='vendas'?'st-vendas': which==='aval'?'st-aval': which==='acomp'?'st-acomp': which==='estoque'?'st-estoque':'st-oficina';
   if(which==='vendas')      { API_VENDAS=''; }
   else if(which==='aval')   { API_AVAL=''; }
   else if(which==='acomp')  { API_ACOMP=''; }
-  else                      { API_ESTOQUE=''; }
-  localStorage.removeItem(key);
+  else if(which==='estoque'){ API_ESTOQUE=''; }
+  else                      { API_OFICINA=''; }
+  _lsRm(key);
   document.getElementById(id).value='';
   const st=document.getElementById(stId); st.textContent='Removido'; st.style.color='var(--muted)';
 }
@@ -597,6 +674,7 @@ function switchPage(page) {
   const _pa=document.getElementById('pageAcomp');if(_pa)_pa.style.display=page==='acomp'?'block':'none';
   const _pe=document.getElementById('pageEstoque');if(_pe)_pe.style.display=page==='estoque'?'block':'none';
   const _pae=document.getElementById('pageAgingEstoque');if(_pae)_pae.style.display=page==='aging-estoque'?'block':'none';
+  const _po=document.getElementById('pageOficina');if(_po)_po.style.display=page==='oficina'?'block':'none';
   document.getElementById('filterBar').style.display   = page==='vendas'&&document.getElementById('sheetSelect').options.length>0?'flex':'none';
   document.getElementById('avalFilterBar').style.display = isAval?'flex':'none';
   document.getElementById('ptVendas').classList.toggle('active', page==='vendas');
@@ -607,6 +685,8 @@ function switchPage(page) {
   const _pta=document.getElementById('ptAcomp');if(_pta)_pta.classList.toggle('active',page==='acomp');
   const _pte=document.getElementById('ptEstoque');if(_pte)_pte.classList.toggle('active',page==='estoque');
   const _ptae=document.getElementById('ptAgingEstoque');if(_ptae)_ptae.classList.toggle('active',page==='aging-estoque');
+  const _pto=document.getElementById('ptOficina');if(_pto)_pto.classList.toggle('active',page==='oficina');
+  if(page==='oficina') initOficinaPage();
   if(page==='aging-estoque') initAgingEstoquePage();
   const dt = document.getElementById('avalDashType');
   if(dt) dt.value = page==='colab'?'colab':'geral';
@@ -835,8 +915,8 @@ function renderVendasTable(id) {
   ];
   // Aplica ordem salva (exceto a coluna # que é sempre a primeira)
   const COL_VER='v3'; // incremente ao adicionar/remover colunas
-  const savedMain=localStorage.getItem('v1_colOrder_main');
-  const savedMainVer=localStorage.getItem('v1_colOrder_main_ver');
+  const savedMain=_ls('v1_colOrder_main',null);
+  const savedMainVer=_ls('v1_colOrder_main_ver',null);
   let orderedCols=[cols[0]]; // # sempre primeiro
   if(savedMain && savedMainVer===COL_VER){
     try{
@@ -847,8 +927,8 @@ function renderVendasTable(id) {
     }catch(e){ orderedCols=cols; }
   } else {
     orderedCols=cols;
-    localStorage.removeItem('v1_colOrder_main');
-    localStorage.setItem('v1_colOrder_main_ver', COL_VER);
+    _lsRm('v1_colOrder_main');
+    _lsSet('v1_colOrder_main_ver', COL_VER);
   }
 
   let h=`<thead><tr>${orderedCols.map((c,ci)=>{
@@ -906,7 +986,7 @@ function colDrop(e,type,targetIdx,tableId){
   const allDet=['placa','modelo','loja','ano','km','diasEstoque','margem','margemRS','pago','fipe','totalRecebido'];
   const allKeys = type==='main'?allMain:allDet;
   let order;
-  try{ order=JSON.parse(localStorage.getItem(storageKey))||allKeys; }catch(e){ order=[...allKeys]; }
+  try{ order=JSON.parse(_ls(storageKey,null))||allKeys; }catch(e){ order=[...allKeys]; }
   // Garante que todas as chaves existam
   allKeys.forEach(k=>{ if(!order.includes(k)) order.push(k); });
   // Para tabela principal, os índices incluem a coluna # (idx 0), então ajustamos
@@ -915,7 +995,7 @@ function colDrop(e,type,targetIdx,tableId){
   if(from<0||to<0) return;
   const moved=order.splice(from,1)[0];
   order.splice(to,0,moved);
-  localStorage.setItem(storageKey,JSON.stringify(order));
+  _lsSet(storageKey,JSON.stringify(order));
   // Re-render
   if(type==='main'){
     const tblId=tableId;
@@ -955,7 +1035,7 @@ function buildDetailTable(rows,did) {
     {k:'pago',l:'% Pago',r:true},{k:'fipe',l:'% Venda FIPE',r:true},{k:'totalRecebido',l:'Total Rec.',r:true},
   ];
   // Aplica ordem salva
-  const savedDet=localStorage.getItem('v1_colOrder_detail');
+  const savedDet=_ls('v1_colOrder_detail',null);
   let cols=allCols;
   if(savedDet){
     try{
@@ -1725,6 +1805,104 @@ function filterVendasByLoja(loja) {
   renderVendasTable('geral'); renderVendasTable('bace'); renderVendasTable('pepb');
   renderKPIs(document.querySelector('.tab-btn.active')?.getAttribute('onclick')?.match(/'(\w+)'/)?.[1]||'geral');
 }
+
+// ── BUSCA POR PLACAS ──────────────────────────────────────────────────────────
+let _placasFoundRows = [];
+
+function limparBuscaPlacas() {
+  document.getElementById('placa-search-input').value = '';
+  document.getElementById('placa-search-result').innerHTML = '';
+  document.getElementById('btn-export-placas').style.display = 'none';
+  _placasFoundRows = [];
+}
+
+function buscarPlacas() {
+  const input = document.getElementById('placa-search-input').value;
+  const placas = input.split(/[\n,;]+/).map(p => p.trim().toUpperCase()).filter(Boolean);
+  if(!placas.length) return;
+
+  const all = window._allVendaRows;
+  if(!all) { alert('Carregue os dados de vendas primeiro.'); return; }
+
+  const allRows = [...(all.geral||[])];
+  _placasFoundRows = allRows.filter(r => placas.includes((r.placa||'').toUpperCase().trim()));
+
+  const result = document.getElementById('placa-search-result');
+  const btnExport = document.getElementById('btn-export-placas');
+
+  if(!_placasFoundRows.length) {
+    result.innerHTML = '<div style="color:var(--red);font-size:12px">Nenhuma placa encontrada nos dados carregados.</div>';
+    btnExport.style.display = 'none';
+    return;
+  }
+
+  // Not found list
+  const found = new Set(_placasFoundRows.map(r => (r.placa||'').toUpperCase().trim()));
+  const notFound = placas.filter(p => !found.has(p));
+
+  const fmtR = v => v ? 'R$ '+Math.round(v).toLocaleString('pt-BR') : '—';
+  const fmtP = v => v ? (v*100).toFixed(1)+'%' : '—';
+
+  let h = `<div style="font-size:11px;color:var(--green);margin-bottom:8px;font-weight:600">✓ ${_placasFoundRows.length} placa(s) encontrada(s)${notFound.length?' | <span style="color:var(--red)">Não encontradas: '+notFound.join(', ')+'</span>':''}</div>`;
+  h += `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px">
+    <thead><tr style="background:#1e1e1e;color:#fff">
+      <th style="padding:6px 10px;text-align:left">Placa</th>
+      <th style="padding:6px 10px;text-align:left">Modelo</th>
+      <th style="padding:6px 10px;text-align:left">Loja</th>
+      <th style="padding:6px 10px;text-align:right">TKM</th>
+      <th style="padding:6px 10px;text-align:right">Dias Est.</th>
+      <th style="padding:6px 10px;text-align:right">% Margem</th>
+      <th style="padding:6px 10px;text-align:right">Margem R$</th>
+      <th style="padding:6px 10px;text-align:right">% Pago</th>
+      <th style="padding:6px 10px;text-align:right">% FIPE</th>
+      <th style="padding:6px 10px;text-align:right">Total Rec.</th>
+    </tr></thead><tbody>`;
+
+  _placasFoundRows.forEach((r, i) => {
+    const bg = i%2===0?'#fff':'#fafaf8';
+    const margemCol = r.margem < 0 ? 'color:var(--red)' : r.margem > 0.08 ? 'color:var(--green)' : 'color:var(--amber)';
+    h += `<tr style="background:${bg};border-bottom:1px solid var(--border)">
+      <td style="padding:6px 10px;font-weight:700;font-family:monospace">${r.placa||'—'}</td>
+      <td style="padding:6px 10px">${r.modeloFull||r.modelo||'—'}</td>
+      <td style="padding:6px 10px;color:var(--muted)">${r.loja||'—'}</td>
+      <td style="padding:6px 10px;text-align:right">${r.tkm?'R$ '+Math.round(r.tkm).toLocaleString('pt-BR'):'—'}</td>
+      <td style="padding:6px 10px;text-align:right">${r.diasEstoque||'—'}</td>
+      <td style="padding:6px 10px;text-align:right;${margemCol}">${fmtP(r.margem)}</td>
+      <td style="padding:6px 10px;text-align:right">${fmtR(r.margemRS)}</td>
+      <td style="padding:6px 10px;text-align:right">${r.pago?(r.pago*100).toFixed(1)+'%':'—'}</td>
+      <td style="padding:6px 10px;text-align:right">${r.fipe?(r.fipe*100).toFixed(1)+'%':'—'}</td>
+      <td style="padding:6px 10px;text-align:right">${fmtR(r.totalRecebido)}</td>
+    </tr>`;
+  });
+  h += '</tbody></table></div>';
+  result.innerHTML = h;
+  btnExport.style.display = 'inline-block';
+}
+
+function exportarPlacasExcel() {
+  if(!_placasFoundRows.length) return;
+  const headers = ['Placa','Modelo','Loja','TKM','Dias Estoque','% Margem','Margem R$','% Pago','% Venda FIPE','Total Recebido'];
+  const rows = _placasFoundRows.map(r => [
+    r.placa||'',
+    r.modeloFull||r.modelo||'',
+    r.loja||'',
+    r.tkm ? Math.round(r.tkm) : '',
+    r.diasEstoque||'',
+    r.margem ? (r.margem*100).toFixed(2)+'%' : '',
+    r.margemRS ? Math.round(r.margemRS) : '',
+    r.pago ? (r.pago*100).toFixed(1)+'%' : '',
+    r.fipe ? (r.fipe*100).toFixed(1)+'%' : '',
+    r.totalRecebido ? Math.round(r.totalRecebido) : ''
+  ]);
+
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+  // Column widths
+  ws['!cols'] = [10,30,30,12,12,12,14,10,14,14].map(w=>({wch:w}));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Análise Placas');
+  XLSX.writeFile(wb, 'analise_placas.xlsx');
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 function exportCSV(id) {
   const data=store[id]; if(!data.length) return;
@@ -3300,6 +3478,9 @@ async function loadEstoqueSheet(name) {
     if(data.error) throw new Error(data.error);
 
     _estoqueCol = data.estoqueCol || data.headers?.[31] || 'ESTOQUE';
+    const _headers = data.headers || [];
+    const _propKey = _headers[32] || 'Flag Proposta'; // Coluna AG
+    const _pedKey  = _headers[33] || 'Flag Pedido';   // Coluna AH
 
     // Mapeamento de campos flexível — usa cabeçalhos reais da planilha
     _estoqueRawRows = (data.rows || []).map(r => {
@@ -3308,7 +3489,9 @@ async function loadEstoqueSheet(name) {
       const tipo   = String(r[_estoqueCol]||'').trim();
       const placa  = String(r['PLACA']||r['Placa']||r['placa']||'').trim().toUpperCase();
       const finalidade = SHOWROOM_TIPOS.some(t=>tipo.includes(t.split(' ')[0]))?'SHOWROOM':REPASSE_TIPOS.some(t=>tipo.includes('REPASSE'))?'REPASSE':'OUTRO';
-      return { modelo: extractFamily(modelo), modeloFull: modelo, loja, tipo, finalidade, placa };
+      const proposta = String(r[_propKey]||'').trim().toLowerCase() === 'sim';
+      const pedido   = String(r[_pedKey]||'').trim().toLowerCase() === 'sim';
+      return { modelo: extractFamily(modelo), modeloFull: modelo, loja, tipo, finalidade, placa, proposta, pedido };
     }).filter(r => r.modelo && r.tipo);
 
     // Tipos únicos do campo estoque
@@ -3502,6 +3685,8 @@ function renderEstoque(rows, name) {
       <div>
         <p style="font-size:11px;font-weight:700;color:var(--muted);margin:0 0 10px;text-transform:uppercase;letter-spacing:.5px">Loja</p>
         <div id="estoqueTabEmpresa" style="border:1px solid var(--border);border-radius:3px;overflow:hidden;font-size:12px"></div>
+        <p style="font-size:11px;font-weight:700;color:var(--muted);margin:18px 0 10px;text-transform:uppercase;letter-spacing:.5px">Proposta e Pedido por Loja</p>
+        <div id="estoqueTabProposta" style="border:1px solid var(--border);border-radius:3px;overflow:hidden;font-size:12px"></div>
       </div>
       <div>
         <p style="font-size:11px;font-weight:700;color:var(--muted);margin:0 0 10px;text-transform:uppercase;letter-spacing:.5px">Modelo</p>
@@ -3543,14 +3728,26 @@ function _renderEstoqueKpis(filtered) {
   const pepbRows = filtered.filter(r => isEstoquePEpb(r.loja));
   const el = document.getElementById('estoqueKpis');
   if(!el) return;
-  const kpi = (label, val) => `
+
+  // Carro com pedido não contabiliza proposta
+  const totalProposta = filtered.filter(r => r.proposta && !r.pedido).length;
+  const totalPedido   = filtered.filter(r => r.pedido).length;
+  const totalAmbos    = filtered.filter(r => (r.proposta && !r.pedido) || r.pedido).length;
+
+  const kpi = (label, val, color) => `
     <div style="background:var(--paper);border:1px solid var(--border);border-radius:3px;padding:.75rem 1.25rem;min-width:130px">
       <p style="font-size:11px;color:var(--muted);margin:0 0 2px;text-transform:uppercase;letter-spacing:.5px">${label}</p>
-      <p style="font-size:24px;font-weight:700;margin:0">${val} <span style="font-size:13px;font-weight:400;color:var(--muted)">un.</span></p>
+      <p style="font-size:24px;font-weight:700;margin:0${color?';color:'+color:''}">${val} <span style="font-size:13px;font-weight:400;color:var(--muted)">un.</span></p>
     </div>`;
 
-  // DEBUG removido — todas as lojas classificadas corretamente
-  el.innerHTML = kpi('Total Geral', filtered.length) + kpi('Total PE/PB', pepbRows.length) + kpi('Total BA/CE', baceRows.length);
+  el.innerHTML =
+    kpi('Total Geral', filtered.length) +
+    kpi('Total PE/PB', pepbRows.length) +
+    kpi('Total BA/CE', baceRows.length) +
+    '<div style="width:1px;background:var(--border);margin:0 4px"></div>' +
+    kpi('Com Proposta', totalProposta, 'var(--amber)') +
+    kpi('Com Pedido', totalPedido, 'var(--blue)') +
+    kpi('Proposta + Pedido', totalAmbos, 'var(--green)');
 }
 
 function _renderEstoqueCharts(filtered) {
@@ -3605,9 +3802,31 @@ function _renderEstoqueCharts(filtered) {
 }
 
 function _renderEstoqueTables(filtered) {
+  window._estoqueLastFiltered = filtered;
   _buildEmpresaTable(filtered);
   _buildFamiliaTable(filtered);
+  _buildPropostaTable(filtered);
 }
+
+
+// ── SORT STATE para tabelas de estoque ───────────────────────────────────────
+const _estoqueSort = { empresa: {col:'qtd',dir:-1}, proposta: {col:'prop',dir:-1} };
+
+function _sortEstoqueTable(table, col) {
+  const s = _estoqueSort[table];
+  s.dir = (s.col === col) ? -s.dir : -1;
+  s.col = col;
+  const f = window._estoqueLastFiltered || [];
+  if(table === 'empresa') _buildEmpresaTable(f);
+  else _buildPropostaTable(f);
+}
+
+function _sortArrow(table, col) {
+  const s = _estoqueSort[table];
+  if(s.col !== col) return ' <span style="color:#555;font-size:9px">⇅</span>';
+  return s.dir === -1 ? ' <span style="color:#fff;font-size:9px">↓</span>' : ' <span style="color:#fff;font-size:9px">↑</span>';
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 function _buildEmpresaTable(rows) {
   const el = document.getElementById('estoqueTabEmpresa'); if(!el) return;
@@ -3623,16 +3842,21 @@ function _buildEmpresaTable(rows) {
     if(isVof) map[r.loja].modelos[r.modelo].vof++;
     if(r.placa) map[r.loja].modelos[r.modelo].placas.push(r.placa);
   });
-  const empresas = Object.entries(map).sort((a,b)=>b[1].qtd-a[1].qtd);
+  const _es = _estoqueSort.empresa;
+  const empresas = Object.entries(map).sort((a,b)=>{
+    const va = _es.col==='loja'?a[0]:_es.col==='vof'?a[1].vof:_es.col==='pvof'?a[1].vof/Math.max(a[1].qtd,1):a[1].qtd;
+    const vb = _es.col==='loja'?b[0]:_es.col==='vof'?b[1].vof:_es.col==='pvof'?b[1].vof/Math.max(b[1].qtd,1):b[1].qtd;
+    return _es.dir * (typeof va==='string'?va.localeCompare(vb):(vb-va)*-1);
+  });
   const CW='width:100%;border-collapse:collapse;table-layout:fixed';
   const C1='width:55%', C2='width:15%', C3='width:15%', C4='width:15%';
   let h = `<table style="${CW}">
     <colgroup><col style="${C1}"><col style="${C2}"><col style="${C3}"><col style="${C4}"></colgroup>
     <thead><tr>
-      <th style="${th}left">Loja</th>
-      <th style="${th}right">Qtd.</th>
-      <th style="${th}right">VOF</th>
-      <th style="${th}right">% VOF</th>
+      <th style="${th}left;cursor:pointer" onclick="_sortEstoqueTable('empresa','loja')">Loja${_sortArrow('empresa','loja')}</th>
+      <th style="${th}right;cursor:pointer" onclick="_sortEstoqueTable('empresa','qtd')">Estoque${_sortArrow('empresa','qtd')}</th>
+      <th style="${th}right;cursor:pointer" onclick="_sortEstoqueTable('empresa','vof')">VOF${_sortArrow('empresa','vof')}</th>
+      <th style="${th}right;cursor:pointer" onclick="_sortEstoqueTable('empresa','pvof')">% VOF${_sortArrow('empresa','pvof')}</th>
     </tr></thead><tbody>`;
   empresas.forEach(([emp, ed], ei) => {
     const eid = `etbl_emp_${ei}`;
@@ -3680,7 +3904,7 @@ function _buildFamiliaTable(rows) {
   let h = `<table style="width:100%;border-collapse:collapse">
     <thead><tr>
       <th style="${th}left">Modelo</th>
-      <th style="${th}right;padding-right:16px">Qtd.</th>
+      <th style="${th}right;padding-right:16px">Estoque</th>
     </tr></thead><tbody>`;
   familias.forEach(([fam,fd],fi)=>{
     const fid=`etbl_fam_${fi}`;
@@ -3696,6 +3920,82 @@ function _buildFamiliaTable(rows) {
     h+=`</table></td></tr>`;
   });
   el.innerHTML = h+'</tbody></table>';
+}
+
+function _buildPropostaTable(rows) {
+  const el = document.getElementById('estoqueTabProposta'); if(!el) return;
+  const th = 'background:#1e1e1e;color:#fff;padding:8px 12px;font-size:10px;text-transform:uppercase;letter-spacing:.5px;font-weight:700;text-align:';
+  const CW = 'width:100%;border-collapse:collapse;table-layout:fixed';
+  const C1 = 'width:40%', C2 = 'width:15%', C3 = 'width:15%', C4 = 'width:15%', C5 = 'width:15%';
+
+  // Agrupa por loja → modelo
+  // Proposta só conta carros SEM pedido (carro com pedido não contabiliza proposta)
+  const map = {};
+  rows.forEach(r => {
+    if(!map[r.loja]) map[r.loja] = { qtd:0, prop:0, ped:0, modelos:{} };
+    map[r.loja].qtd++;
+    if(r.pedido)              map[r.loja].ped++;
+    if(r.proposta && !r.pedido) map[r.loja].prop++; // proposta só se não tiver pedido
+    if(!map[r.loja].modelos[r.modelo]) map[r.loja].modelos[r.modelo] = { qtd:0, prop:0, ped:0, placas:[] };
+    map[r.loja].modelos[r.modelo].qtd++;
+    if(r.pedido)              map[r.loja].modelos[r.modelo].ped++;
+    if(r.proposta && !r.pedido) map[r.loja].modelos[r.modelo].prop++;
+    if(r.placa)               map[r.loja].modelos[r.modelo].placas.push(r.placa);
+  });
+
+  const _ps = _estoqueSort.proposta;
+  const lojas = Object.entries(map).sort((a,b)=>{
+    const va = _ps.col==='loja'?a[0]:_ps.col==='ped'?a[1].ped:_ps.col==='pprop'?a[1].prop/Math.max(a[1].qtd,1):_ps.col==='estoque'?a[1].qtd:a[1].prop;
+    const vb = _ps.col==='loja'?b[0]:_ps.col==='ped'?b[1].ped:_ps.col==='pprop'?b[1].prop/Math.max(b[1].qtd,1):_ps.col==='estoque'?b[1].qtd:b[1].prop;
+    return _ps.dir * (typeof va==='string'?va.localeCompare(vb):(vb-va)*-1);
+  });
+  const pctColor = p => p > 20 ? 'var(--red)' : p > 0 ? 'var(--amber)' : 'var(--muted)';
+
+  let h = `<table style="${CW}">
+    <colgroup><col style="${C1}"><col style="${C2}"><col style="${C3}"><col style="${C4}"><col style="${C5}"></colgroup>
+    <thead><tr>
+      <th style="${th}left;cursor:pointer" onclick="_sortEstoqueTable('proposta','loja')">Loja${_sortArrow('proposta','loja')}</th>
+      <th style="${th}right;cursor:pointer" onclick="_sortEstoqueTable('proposta','estoque')">Estoque${_sortArrow('proposta','estoque')}</th>
+      <th style="${th}right;cursor:pointer" onclick="_sortEstoqueTable('proposta','prop')">Proposta${_sortArrow('proposta','prop')}</th>
+      <th style="${th}right;cursor:pointer" onclick="_sortEstoqueTable('proposta','ped')">Pedido${_sortArrow('proposta','ped')}</th>
+      <th style="${th}right;cursor:pointer" onclick="_sortEstoqueTable('proposta','pprop')">% Prop.${_sortArrow('proposta','pprop')}</th>
+    </tr></thead><tbody>`;
+
+  lojas.forEach(([loja, ld], li) => {
+    const lid = `prop_l_${li}`;
+    const pct = ld.qtd ? ((ld.prop / ld.qtd) * 100).toFixed(1) + '%' : '—';
+    const col = pctColor(ld.qtd ? (ld.prop/ld.qtd)*100 : 0);
+    h += `<tr style="background:${li%2===0?'#fff':'#fafaf8'};border-bottom:1px solid var(--border);cursor:pointer" onclick="toggleEsqRow('${lid}')">
+      <td style="padding:5px 10px;font-weight:600"><span id="${lid}_icon" style="font-size:10px;margin-right:5px;color:var(--muted)">⊞</span>${loja}</td>
+      <td style="padding:5px 10px;text-align:right;font-weight:700">${ld.qtd}</td>
+      <td style="padding:5px 10px;text-align:right;color:var(--amber)">${ld.prop||'—'}</td>
+      <td style="padding:5px 10px;text-align:right;color:var(--blue)">${ld.ped||'—'}</td>
+      <td style="padding:5px 10px;text-align:right;font-weight:600;color:${col}">${pct}</td>
+    </tr>
+    <tr id="${lid}" style="display:none"><td colspan="5" style="padding:0">
+      <table style="${CW};background:#f5f4f0"><colgroup><col style="${C1}"><col style="${C2}"><col style="${C3}"><col style="${C4}"><col style="${C5}"></colgroup>`;
+
+    Object.entries(ld.modelos).sort((a,b) => b[1].prop - a[1].prop).forEach(([mod, md], mi) => {
+      const mid = `prop_m_${li}_${mi}`;
+      const mpct = md.qtd ? ((md.prop/md.qtd)*100).toFixed(1)+'%' : '—';
+      h += `<tr style="border-bottom:1px solid #e8e7e2;cursor:pointer" onclick="toggleEsqRow('${mid}')">
+        <td style="padding:4px 10px 4px 26px"><span id="${mid}_icon" style="font-size:9px;margin-right:5px;color:var(--muted)">⊞</span>${mod}</td>
+        <td style="padding:4px 10px;text-align:right;font-weight:600">${md.qtd}</td>
+        <td style="padding:4px 10px;text-align:right;color:var(--amber)">${md.prop||'—'}</td>
+        <td style="padding:4px 10px;text-align:right;color:var(--blue)">${md.ped||'—'}</td>
+        <td style="padding:4px 10px;text-align:right;color:${pctColor(md.qtd?(md.prop/md.qtd)*100:0)};font-weight:600">${mpct}</td>
+      </tr>
+      <tr id="${mid}" style="display:none"><td colspan="5" style="padding:0">
+        <table style="${CW};background:#eaeae4"><colgroup><col style="${C1}"><col style="${C2}"><col style="${C3}"><col style="${C4}"><col style="${C5}"></colgroup>`;
+      (md.placas.length ? md.placas : ['—']).forEach(p => {
+        h += `<tr style="border-bottom:1px solid #e0dfd8"><td style="padding:3px 10px 3px 44px;color:var(--muted);font-size:11px">${p}</td><td colspan="4"></td></tr>`;
+      });
+      h += `</table></td></tr>`;
+    });
+    h += `</table></td></tr>`;
+  });
+
+  el.innerHTML = h + '</tbody></table>';
 }
 
 function toggleEsqRow(id) {
@@ -4007,6 +4307,155 @@ function toggleAgingEstoqueDetail(id, row) {
   if(icon) icon.textContent=open?'⊟':'⊞';
 }
 
+// ── OFICINA ───────────────────────────────────────────────────────────────────
+let _oficinaRawData = [];
+
+function initOficinaPage() {
+  if(!API_OFICINA) {
+    document.getElementById('oficina-table').innerHTML =
+      '<div style="padding:2rem;color:var(--muted)">Configure a URL da API de Oficina nas configurações (⚙).</div>';
+    return;
+  }
+  const sel = document.getElementById('oficina-sheet-sel');
+  if(!sel) return;
+  if(sel.options.length > 1) { if(sel.value) loadOficinaSheet(sel.value); return; }
+  sel.innerHTML = '<option>Carregando...</option>';
+  jsonp(API_OFICINA, {sheet:'__sheets__'}).then(data => {
+    const sheets = data.sheets || [];
+    sel.innerHTML = sheets.map(s => '<option value="'+s+'">'+s+'</option>').join('');
+    if(sel.options.length) {
+      sel.value = sel.options[sel.options.length-1].value;
+      loadOficinaSheet(sel.value);
+    }
+  }).catch(() => { sel.innerHTML = '<option>Erro ao carregar abas</option>'; });
+}
+
+function loadOficinaSheet(name) {
+  if(!name) return;
+  const tbl = document.getElementById('oficina-table');
+  tbl.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--muted)"><div class="spin2" style="margin:0 auto 8px"></div>Carregando...</div>';
+  document.getElementById('oficina-kpis').innerHTML = '';
+  jsonp(API_OFICINA, {sheet:name}).then(data => {
+    if(data.error) throw new Error(data.error);
+    _oficinaRawData = data.rows || [];
+    // Populate empresa filter
+    const empresas = [...new Set(_oficinaRawData.map(r => String(r['Empresa_Nome']||'').trim()).filter(Boolean))].sort();
+    const sel = document.getElementById('oficina-empresa-sel');
+    sel.innerHTML = '<option value="">Todas as empresas</option>' +
+      empresas.map(e => '<option value="'+e+'">'+e+'</option>').join('');
+    renderOficina();
+  }).catch(err => {
+    tbl.innerHTML = '<div style="padding:2rem;color:var(--red)">Erro: '+err.message+'</div>';
+  });
+}
+
+function renderOficina() {
+  if(!_oficinaRawData.length) return;
+  const empresa = document.getElementById('oficina-empresa-sel')?.value || '';
+  const rows = empresa
+    ? _oficinaRawData.filter(r => String(r['Empresa_Nome']||'').trim() === empresa)
+    : _oficinaRawData;
+
+  const map = {};
+  rows.forEach(r => {
+    const nome = String(r['Usuario_Nome']||'').split(' - Mat.')[0].trim();
+    if(!nome) return;
+    if(!map[nome]) map[nome] = { mo:0, pecas:0, passagem:0, osQtd:0, hv:0 };
+    map[nome].mo       += toNum(r['Valor_Liquido']);
+    map[nome].pecas    += toNum(r['Valor_Produtos']);
+    map[nome].passagem += toNum(r['Qtde_Veiculo']);
+    map[nome].osQtd    += toNum(r['Qtde_OS']);
+    map[nome].hv       += toNum(r['Horas_Vendidas']);
+  });
+
+  const diasUteis = Math.max(1, parseInt(document.getElementById('oficina-dias-uteis')?.value||'22'));
+
+  const cons  = Object.entries(map).sort((a,b) => b[1].mo - a[1].mo);
+  const totMO    = cons.reduce((s,[,v])=>s+v.mo,0);
+  const totPecas = cons.reduce((s,[,v])=>s+v.pecas,0);
+  const totPass  = cons.reduce((s,[,v])=>s+v.passagem,0);
+  const totOS    = cons.reduce((s,[,v])=>s+v.osQtd,0);
+  const totHV    = cons.reduce((s,[,v])=>s+v.hv,0);
+
+  const fN  = v => v ? Math.round(v).toLocaleString('pt-BR') : '—';
+  const fD  = (v,d) => v ? v.toFixed(d).replace('.',',') : '—';
+  const fR  = v => v ? 'R$ '+Math.round(v).toLocaleString('pt-BR') : '—';
+
+  // KPIs
+  const kpis = document.getElementById('oficina-kpis');
+  const kpi = (l,v,c) => '<div style="background:#fff;border:1px solid var(--border);border-left:3px solid '+c+';border-radius:3px;padding:.65rem 1.2rem;min-width:150px">'
+    +'<p style="font-size:10px;color:var(--muted);margin:0 0 2px;text-transform:uppercase;letter-spacing:.5px;font-weight:600">'+l+'</p>'
+    +'<p style="font-size:20px;font-weight:700;margin:0">'+v+'</p></div>';
+  if(kpis) kpis.innerHTML =
+    kpi('Total MO',    fR(totMO),    '#1a3c8a') +
+    kpi('Total Peças', fR(totPecas), '#1a7a4c') +
+    kpi('Passagens',   fN(totPass),  '#7a5a00') +
+    kpi('Total OS',    fN(totOS),    '#6a1a7a');
+
+  const BH  = 'background:#1a2a48;color:#fff;padding:9px 12px;font-size:11px;font-weight:700;text-align:';
+  const SH  = 'background:#233554;color:#ccd;padding:7px 10px;font-size:10px;font-weight:600;text-align:';
+  const TD  = 'padding:8px 10px;text-align:';
+  const STD = 'padding:9px 10px;text-align:';
+
+  let h = '<table style="width:100%;border-collapse:collapse;font-size:12px;min-width:900px"><thead>'
+    +'<tr>'
+    +'<th style="'+BH+'left" rowspan="2">Consultor Técnico</th>'
+    +'<th style="'+BH+'center;border-left:2px solid #2a5a8a" colspan="3">Mão de Obra</th>'
+    +'<th style="'+BH+'center;border-left:2px solid #2a5a8a" colspan="3">Peças</th>'
+    +'<th style="'+BH+'center;border-left:2px solid #2a5a8a" colspan="3">Informações Adicionais</th>'
+    +'</tr>'
+    +'<tr>'
+    +'<th style="'+SH+'right">Venda</th>'
+    +'<th style="'+SH+'right">TM MO</th>'
+    +'<th style="'+SH+'right">HV</th>'
+    +'<th style="'+SH+'right;border-left:2px solid #1a2a48">Venda</th>'
+    +'<th style="'+SH+'right">TM PC</th>'
+    +'<th style="'+SH+'right">Peças×MO</th>'
+    +'<th style="'+SH+'center;border-left:2px solid #1a2a48">Passagem</th>'
+    +'<th style="'+SH+'right">PMD</th>'
+    +'<th style="'+SH+'right">Total OS</th>'
+    +'</tr></thead><tbody>';
+
+  cons.forEach(([nome, d], i) => {
+    const tmmo = d.passagem ? d.mo/d.passagem : 0;
+    const tmpc = d.passagem ? d.pecas/d.passagem : 0;
+    const pxmo = d.mo ? d.pecas/d.mo : 0;
+    const pmd  = diasUteis ? d.passagem/diasUteis : 0;
+    const bg   = i%2===0 ? '#fff' : '#f7f8fa';
+    h += '<tr style="background:'+bg+';border-bottom:1px solid var(--border)">'
+      +'<td style="'+TD+'left;font-weight:600">'+nome+'</td>'
+      +'<td style="'+TD+'right">'+fN(d.mo)+'</td>'
+      +'<td style="'+TD+'right;color:var(--muted)">'+fN(tmmo)+'</td>'
+      +'<td style="'+TD+'right;color:var(--muted)">'+fD(d.hv,1)+'</td>'
+      +'<td style="'+TD+'right;border-left:2px solid #e8e7e0">'+fN(d.pecas)+'</td>'
+      +'<td style="'+TD+'right;color:var(--muted)">'+fN(tmpc)+'</td>'
+      +'<td style="'+TD+'right">'+fD(pxmo,1)+'</td>'
+      +'<td style="'+TD+'center;border-left:2px solid #e8e7e0;font-weight:700">'+d.passagem+'</td>'
+      +'<td style="'+TD+'right">'+fD(pmd,2)+'</td>'
+      +'<td style="'+TD+'right;color:var(--muted)">'+d.osQtd+'</td>'
+      +'</tr>';
+  });
+
+  const stmmo = totPass ? totMO/totPass : 0;
+  const stmpc = totPass ? totPecas/totPass : 0;
+  const spxmo = totMO ? totPecas/totMO : 0;
+  const spmd  = diasUteis ? totPass/diasUteis : 0;
+  h += '<tr style="border-top:2px solid #1a2a48">'
+    +'<td style="'+STD+'left;font-weight:700;background:#1a2a48;color:#fff">Subtotal</td>'
+    +'<td style="'+STD+'right;font-weight:700;background:#1a2a48;color:#fff">'+fN(totMO)+'</td>'
+    +'<td style="'+STD+'right;background:#1a2a48;color:#aaa">'+fN(stmmo)+'</td>'
+    +'<td style="'+STD+'right;background:#1a2a48;color:#aaa">'+fD(totHV,1)+'</td>'
+    +'<td style="'+STD+'right;font-weight:700;background:#1a2a48;color:#fff;border-left:2px solid #2a4a6a">'+fN(totPecas)+'</td>'
+    +'<td style="'+STD+'right;background:#1a2a48;color:#aaa">'+fN(stmpc)+'</td>'
+    +'<td style="'+STD+'right;background:#1a2a48;color:#fff;font-weight:700">'+fD(spxmo,1)+'</td>'
+    +'<td style="'+STD+'center;font-weight:700;background:#1a2a48;color:#fff;border-left:2px solid #2a4a6a">'+fN(totPass)+'</td>'
+    +'<td style="'+STD+'right;background:#1a2a48;color:#fff;font-weight:700">'+fD(spmd,2)+'</td>'
+    +'<td style="'+STD+'right;background:#1a2a48;color:#aaa">'+fN(totOS)+'</td>'
+    +'</tr></tbody></table>';
+
+  document.getElementById('oficina-table').innerHTML = h;
+}
+// ─────────────────────────────────────────────────────────────────────────────
 </script>
 </body>
 </html>
