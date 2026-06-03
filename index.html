@@ -413,6 +413,34 @@ td:last-child{border-right:none}
   </div>
 </div>
 
+<!-- VENDA TOP 10 PAGE -->
+<div id="pageVendaTop10" style="display:none">
+  <div style="background:#fff;border-bottom:1px solid var(--border);padding:6px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+    <div>
+      <div class="filter-label">Aba</div>
+      <select class="sheet-select" id="top10SheetSelect" onchange="top10ChangeSheet(this.value)" style="min-width:200px"></select>
+    </div>
+    <div id="top10LojaWrap" style="position:relative;display:inline-block;margin-left:8px">
+      <div class="filter-label">Operação</div>
+      <button onclick="toggleTop10LojaDD()" style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--border2);border-radius:3px;padding:6px 14px;font-size:11px;font-weight:600;cursor:pointer;min-width:220px;justify-content:space-between">
+        <span>Operação</span>
+        <span id="top10LojaLabel" style="color:var(--muted);font-weight:400">Todas as lojas</span>
+        <span style="font-size:9px;color:var(--muted)">▼</span>
+      </button>
+      <div id="top10LojaDD" style="display:none;position:absolute;top:100%;left:0;z-index:999;background:#fff;border:1px solid var(--border);border-radius:3px;box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:280px;max-height:320px;overflow-y:auto;margin-top:2px">
+        <div style="padding:8px 12px;border-bottom:1px solid var(--border)"><span style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Seleções múltiplas</span></div>
+        <label style="display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;border-bottom:1px solid #e0dfd8;font-size:12px;font-weight:600" onmouseenter="this.style.background='#f5f4f0'" onmouseleave="this.style.background=''">
+          <input type="checkbox" id="top10LojaAll" checked onchange="toggleTodasTop10Lojas(this.checked)"><span>Todas as lojas</span>
+        </label>
+        <div id="top10LojaItems"></div>
+      </div>
+    </div>
+  </div>
+  <div style="padding:16px 20px 60px" id="venda-top10-body">
+    <div style="padding:2rem;color:var(--muted);text-align:center">Carregue a base de vendas para visualizar o Top 10.</div>
+  </div>
+</div>
+
 <!-- OFICINA PAGE -->
 <div id="pageOficina" style="display:none">
   <div style="background:#fff;border-bottom:1px solid var(--border);padding:6px 20px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
@@ -450,6 +478,7 @@ td:last-child{border-right:none}
   <div class="ptab" id="ptEstoque" data-page="estoque" draggable="true">Estoque</div>
   <div class="ptab" id="ptAgingEstoque" data-page="aging-estoque" draggable="true">Aging Estoque</div>
   <div class="ptab" id="ptOficina" data-page="oficina" draggable="true">Oficina</div>
+  <div class="ptab" id="ptVendaTop10" data-page="venda-top10" draggable="true">Venda Top 10</div>
 </div>
 
 <script>
@@ -675,6 +704,7 @@ function switchPage(page) {
   const _pe=document.getElementById('pageEstoque');if(_pe)_pe.style.display=page==='estoque'?'block':'none';
   const _pae=document.getElementById('pageAgingEstoque');if(_pae)_pae.style.display=page==='aging-estoque'?'block':'none';
   const _po=document.getElementById('pageOficina');if(_po)_po.style.display=page==='oficina'?'block':'none';
+  const _pvt=document.getElementById('pageVendaTop10');if(_pvt)_pvt.style.display=page==='venda-top10'?'block':'none';
   document.getElementById('filterBar').style.display   = page==='vendas'&&document.getElementById('sheetSelect').options.length>0?'flex':'none';
   document.getElementById('avalFilterBar').style.display = isAval?'flex':'none';
   document.getElementById('ptVendas').classList.toggle('active', page==='vendas');
@@ -686,7 +716,9 @@ function switchPage(page) {
   const _pte=document.getElementById('ptEstoque');if(_pte)_pte.classList.toggle('active',page==='estoque');
   const _ptae=document.getElementById('ptAgingEstoque');if(_ptae)_ptae.classList.toggle('active',page==='aging-estoque');
   const _pto=document.getElementById('ptOficina');if(_pto)_pto.classList.toggle('active',page==='oficina');
+  const _ptvt=document.getElementById('ptVendaTop10');if(_ptvt)_ptvt.classList.toggle('active',page==='venda-top10');
   if(page==='oficina') initOficinaPage();
+  if(page==='venda-top10') initVendaTop10Page();
   if(page==='aging-estoque') initAgingEstoquePage();
   const dt = document.getElementById('avalDashType');
   if(dt) dt.value = page==='colab'?'colab':'geral';
@@ -830,6 +862,8 @@ async function loadSheet(name) {
     document.getElementById('contentVendas').style.display='block';
     document.getElementById('loadingVendas').style.display='none';
     showTab('geral',false);
+    // Atualiza Top 10 se a aba estiver visível
+    if(document.getElementById('pageVendaTop10')?.style.display==='block') initVendaTop10Page();
   } catch(e) {
     setStatus('red','Erro: '+e.message);
     document.getElementById('loadingVendas').style.display='none';
@@ -4306,6 +4340,178 @@ function toggleAgingEstoqueDetail(id, row) {
   det.style.display=open?'table-row':'none';
   if(icon) icon.textContent=open?'⊟':'⊞';
 }
+
+// ── VENDA TOP 10 ──────────────────────────────────────────────────────────────
+let _top10SelectedLojas = new Set();
+let _top10AllLojas = [];
+
+function initVendaTop10Page() {
+  // Sync ABA selector with vendas
+  const src = document.getElementById('sheetSelect');
+  const dst = document.getElementById('top10SheetSelect');
+  if(src && dst && dst.innerHTML !== src.innerHTML) {
+    dst.innerHTML = src.innerHTML;
+    dst.value = src.value;
+  }
+
+  // Se dados ainda não carregados, dispara o carregamento
+  const all = window._allVendaRows;
+  if(!all || !all.geral || !all.geral.length) {
+    const sheet = src?.value || dst?.value;
+    if(sheet) {
+      document.getElementById('venda-top10-body').innerHTML =
+        '<div style="padding:2rem;text-align:center;color:var(--muted)"><div class="spin2" style="margin:0 auto 8px"></div>Carregando dados...</div>';
+      loadSheet(sheet); // carrega vendas — renderVendaTop10 será chamado depois
+    }
+    return;
+  }
+
+  // Sync lojas from _allVendaRows
+  const lojas = [...new Set((all.geral||[]).map(r=>r.loja).filter(Boolean))].sort();
+  _top10AllLojas = lojas;
+  if(_top10SelectedLojas.size === 0) _top10SelectedLojas = new Set(lojas);
+
+  // Build loja items
+  const items = document.getElementById('top10LojaItems');
+  if(items && items.children.length !== lojas.length) {
+    items.innerHTML = lojas.map(l => {
+      const reg = BA_CE.some(b=>l.toUpperCase().includes(b.toUpperCase()))
+        ? '<span style="font-size:9px;background:#e8f5ee;color:var(--green);border-radius:2px;padding:1px 4px;margin-left:6px">BA/CE</span>'
+        : PE_PB.some(p=>l.toUpperCase().includes(p.toUpperCase()))
+        ? '<span style="font-size:9px;background:#e8f0fd;color:#1a3c8a;border-radius:2px;padding:1px 4px;margin-left:6px">PE/PB</span>' : '';
+      return `<label style="display:flex;align-items:center;gap:10px;padding:8px 14px;cursor:pointer;border-bottom:1px solid #f5f4f0;font-size:11px" onmouseenter="this.style.background='#f5f4f0'" onmouseleave="this.style.background=''">
+        <input type="checkbox" class="top10-loja-cb" data-loja="${l}" ${_top10SelectedLojas.has(l)?'checked':''} onchange="onTop10LojaCb()">
+        <span style="flex:1">${l}</span>${reg}</label>`;
+    }).join('');
+  }
+  renderVendaTop10();
+}
+
+function toggleTop10LojaDD() {
+  const dd = document.getElementById('top10LojaDD');
+  if(dd) dd.style.display = dd.style.display==='none'?'block':'none';
+}
+function toggleTodasTop10Lojas(checked) {
+  document.querySelectorAll('.top10-loja-cb').forEach(cb => cb.checked = checked);
+  _top10SelectedLojas = checked ? new Set(_top10AllLojas) : new Set();
+  _updateTop10LojaLabel();
+  renderVendaTop10();
+}
+function onTop10LojaCb() {
+  _top10SelectedLojas = new Set([...document.querySelectorAll('.top10-loja-cb:checked')].map(cb=>cb.dataset.loja));
+  const allCb = document.getElementById('top10LojaAll');
+  if(allCb) allCb.checked = _top10SelectedLojas.size === _top10AllLojas.length;
+  _updateTop10LojaLabel();
+  renderVendaTop10();
+}
+function _updateTop10LojaLabel() {
+  const lbl = document.getElementById('top10LojaLabel');
+  if(lbl) lbl.textContent = _top10SelectedLojas.size===_top10AllLojas.length
+    ? 'Todas as lojas' : `${_top10SelectedLojas.size} selecionada${_top10SelectedLojas.size>1?'s':''}`;
+}
+function top10ChangeSheet(name) {
+  // Also change vendas sheet
+  const src = document.getElementById('sheetSelect');
+  if(src && src.value !== name) { src.value = name; loadSheet(name); }
+  else renderVendaTop10();
+}
+// Close dropdown on outside click
+document.addEventListener('click', function(e) {
+  const wrap = document.getElementById('top10LojaWrap');
+  if(wrap && !wrap.contains(e.target)) {
+    const dd = document.getElementById('top10LojaDD');
+    if(dd) dd.style.display = 'none';
+  }
+});
+
+function renderVendaTop10() {
+  const body = document.getElementById('venda-top10-body');
+  if(!body) return;
+  const all = window._allVendaRows;
+  if(!all || !all.geral || !all.geral.length) {
+    body.innerHTML = '<div style="padding:2rem;color:var(--muted);text-align:center">Carregue a base de vendas para visualizar o Top 10.</div>';
+    return;
+  }
+  // Sync ABA selector
+  const src = document.getElementById('sheetSelect');
+  const dst = document.getElementById('top10SheetSelect');
+  if(src && dst && dst.innerHTML !== src.innerHTML) { dst.innerHTML = src.innerHTML; dst.value = src.value; }
+  const sheetName = src?.options[src?.selectedIndex]?.text || '';
+  const sel = _top10SelectedLojas.size > 0 ? _top10SelectedLojas : new Set(_top10AllLojas);
+  const filterRow = r => sel.size === 0 || sel.size === _top10AllLojas.length || sel.has(r.loja);
+
+  function aggTop10(rows) {
+    const map = {};
+    rows.filter(filterRow).forEach(r => {
+      const m = r.familia || r.modelo || '';
+      if(!m) return;
+      if(!map[m]) map[m] = { vol:0, margemSum:0, margemRsSum:0, pagoSum:0, fipeSum:0 };
+      map[m].vol++;
+      map[m].margemSum   += r.margem||0;
+      map[m].margemRsSum += r.margemRS||0;
+      map[m].pagoSum     += r.pago||0;
+      map[m].fipeSum     += r.fipe||0;
+    });
+    return Object.entries(map)
+      .map(([m,d]) => ({ modelo:m, vol:d.vol,
+        margemRS: d.vol?d.margemRsSum/d.vol:0,
+        margem:   d.vol?d.margemSum/d.vol:0,
+        pago:     d.vol?d.pagoSum/d.vol:0,
+        fipe:     d.vol?d.fipeSum/d.vol:0 }))
+      .sort((a,b) => b.vol-a.vol || b.margemRS-a.margemRS)
+      .slice(0,10);
+  }
+
+  const topGeral = aggTop10(all.geral||[]);
+  const topBACE  = aggTop10(all.bace||[]);
+  const topPEPB  = aggTop10(all.pepb||[]);
+
+  const fmtR  = v => v ? 'R$ '+Math.round(v).toLocaleString('pt-BR') : '—';
+  const fmtP  = v => v ? (v*100).toFixed(2)+'%' : '—';
+  const fmtPc = v => v ? (v*100).toFixed(1)+'%' : '—';
+  const rowBg = i => i%2===0 ? '#f5f5ee' : '#ffffff';
+
+  function buildTable(title, subtitle, color, rows) {
+    if(!rows.length) return `<div style="border:1px solid #ccc;border-radius:3px;padding:2rem;text-align:center;color:var(--muted)">Sem dados</div>`;
+    let h = `<div style="border:1px solid #ccc;border-radius:3px;overflow:hidden;font-size:12px">
+      <div style="background:${color};color:#fff;padding:10px 14px;text-align:center;font-weight:700;font-size:13px;letter-spacing:.5px">${title}</div>
+      <div style="background:#f5f5f5;color:#666;padding:5px;text-align:center;font-size:10px;font-style:italic;border-bottom:1px solid #e0e0e0">${subtitle}</div>
+      <table style="width:100%;border-collapse:collapse"><thead><tr style="background:#2a3a4a;color:#fff">
+        <th style="padding:7px 8px;text-align:center;width:32px">#</th>
+        <th style="padding:7px 10px;text-align:left">MODELO</th>
+        <th style="padding:7px 10px;text-align:center">VOLUME</th>
+        <th style="padding:7px 10px;text-align:right">$ MARGEM</th>
+        <th style="padding:7px 10px;text-align:right">% MARGEM</th>
+        <th style="padding:7px 10px;text-align:right">%PAGO</th>
+        <th style="padding:7px 10px;text-align:right">% VENDA FIPE</th>
+      </tr></thead><tbody>`;
+    rows.forEach((r,i) => {
+      h += `<tr style="background:${rowBg(i)};border-bottom:1px solid #e8e8e0">
+        <td style="padding:7px 8px;text-align:center;font-weight:700;color:#999">${i+1}</td>
+        <td style="padding:7px 10px;font-weight:600">${r.modelo}</td>
+        <td style="padding:7px 10px;text-align:center;font-weight:700">${r.vol}</td>
+        <td style="padding:7px 10px;text-align:right">${fmtR(r.margemRS)}</td>
+        <td style="padding:7px 10px;text-align:right">${fmtP(r.margem)}</td>
+        <td style="padding:7px 10px;text-align:right">${fmtPc(r.pago)}</td>
+        <td style="padding:7px 10px;text-align:right">${fmtPc(r.fipe)}</td>
+      </tr>`;
+    });
+    h += '</tbody></table></div>';
+    return h;
+  }
+
+  const subtitle = `${sheetName} · Agrupado por família`;
+  body.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px">
+      ${buildTable('TOP 10 — BAHIA E CEARÁ', subtitle, '#1a4a8a', topBACE)}
+      ${buildTable('TOP 10 — PERNAMBUCO E PARAÍBA', subtitle, '#1a7a4c', topPEPB)}
+    </div>
+    <div style="max-width:740px">
+      ${buildTable('TOP 10 MODELOS DE CARROS MAIS VENDIDOS — '+sheetName.toUpperCase(), 'Agrupado por família de modelo', '#1a2a48', topGeral)}
+    </div>`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 // ── OFICINA ───────────────────────────────────────────────────────────────────
 let _oficinaRawData = [];
