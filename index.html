@@ -243,6 +243,15 @@ th:hover .col-rh,.col-rh:hover,.col-rh.rh-drag{opacity:1;background:rgba(255,255
       </div>
       <div class="config-status" id="st-backcusto"></div>
     </div>
+    <div>
+      <div class="config-box-title">🔩 Back - Produtivo PE</div>
+      <div class="config-row">
+        <input class="config-input" id="apiUrl7" type="text" placeholder="https://script.google.com/...">
+        <button class="btn-save" onclick="saveURL('backprodpe')">Salvar</button>
+        <button class="btn-clear" onclick="clearURL('backprodpe')">✕</button>
+      </div>
+      <div class="config-status" id="st-backprodpe"></div>
+    </div>
   </div>
   <div class="config-hint">
     Cole a URL do Web App do Apps Script em cada campo e clique Salvar. As URLs ficam salvas no navegador.
@@ -643,6 +652,7 @@ let API_ACOMP   = _ls('v1_acomp',   'https://script.google.com/macros/s/AKfycbwi
 let API_ESTOQUE = _ls('v1_estoque', 'https://script.google.com/macros/s/AKfycbzO8yYahoKvXi4LjVFOGzDciDkO2EDmqu605nuHmfdFZkswSLSrnJcm7MaLotbK5s-J/exec');
 let API_OFICINA = _ls('v1_oficina', 'https://script.google.com/macros/s/AKfycbxHt2EkEo7bIS04wb0lJLH_HfQ1tB84HWeghAMOrg2ogyCtyKH9KjU67lSLnN-xxXKt/exec');
 let API_BACKCUSTO = _ls('v1_backcusto', '');
+let API_BACKPRODPE = _ls('v1_backprodpe', '');
 let store = {geral:[],bace:[],pepb:[]};
 let rawRows = {geral:[],bace:[],pepb:[]};
 let avalData = null;
@@ -660,12 +670,14 @@ window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('apiUrl4').value = API_ESTOQUE || '';
   document.getElementById('apiUrl5').value = API_OFICINA || '';
   document.getElementById('apiUrl6').value = API_BACKCUSTO || '';
+  document.getElementById('apiUrl7').value = API_BACKPRODPE || '';
   if(API_VENDAS)  { document.getElementById('st-vendas').textContent='✓ Configurado';  document.getElementById('st-vendas').style.color='var(--green)'; }
   if(API_AVAL)    { document.getElementById('st-aval').textContent='✓ Configurado';    document.getElementById('st-aval').style.color='var(--green)'; }
   if(API_ACOMP)   { document.getElementById('st-acomp').textContent='✓ Configurado';   document.getElementById('st-acomp').style.color='var(--green)'; }
   if(API_ESTOQUE) { document.getElementById('st-estoque').textContent='✓ Configurado'; document.getElementById('st-estoque').style.color='var(--green)'; }
   if(API_OFICINA) { document.getElementById('st-oficina').textContent='✓ Configurado'; document.getElementById('st-oficina').style.color='var(--green)'; }
   if(API_BACKCUSTO) { document.getElementById('st-backcusto').textContent='✓ Configurado'; document.getElementById('st-backcusto').style.color='var(--green)'; }
+  if(API_BACKPRODPE) { document.getElementById('st-backprodpe').textContent='✓ Configurado'; document.getElementById('st-backprodpe').style.color='var(--green)'; }
   loadVendas();
 });
 
@@ -686,9 +698,9 @@ function jsonp(baseUrl, params) {
 // ── CONFIG ────────────────────────────────────────────────────────────────────
 function toggleConfig() { document.getElementById('configPanel').style.display = document.getElementById('configPanel').style.display==='block'?'none':'block'; }
 function saveURL(which) {
-  const id   = which==='vendas'?'apiUrl': which==='aval'?'apiUrl2': which==='acomp'?'apiUrl3': which==='estoque'?'apiUrl4': which==='backcusto'?'apiUrl6':'apiUrl5';
-  const key  = which==='vendas'?'v1_vendas': which==='aval'?'v1_aval': which==='acomp'?'v1_acomp': which==='estoque'?'v1_estoque': which==='backcusto'?'v1_backcusto':'v1_oficina';
-  const stId = which==='vendas'?'st-vendas': which==='aval'?'st-aval': which==='acomp'?'st-acomp': which==='estoque'?'st-estoque': which==='backcusto'?'st-backcusto':'st-oficina';
+  const id   = which==='vendas'?'apiUrl': which==='aval'?'apiUrl2': which==='acomp'?'apiUrl3': which==='estoque'?'apiUrl4': which==='backcusto'?'apiUrl6': which==='backprodpe'?'apiUrl7':'apiUrl5';
+  const key  = which==='vendas'?'v1_vendas': which==='aval'?'v1_aval': which==='acomp'?'v1_acomp': which==='estoque'?'v1_estoque': which==='backcusto'?'v1_backcusto': which==='backprodpe'?'v1_backprodpe':'v1_oficina';
+  const stId = which==='vendas'?'st-vendas': which==='aval'?'st-aval': which==='acomp'?'st-acomp': which==='estoque'?'st-estoque': which==='backcusto'?'st-backcusto': which==='backprodpe'?'st-backprodpe':'st-oficina';
   const val  = document.getElementById(id).value.trim();
   if(!val) return alert('Cole a URL do Apps Script');
   if(which==='vendas')        { API_VENDAS=val;  _lsSet(key,val); }
@@ -699,6 +711,7 @@ function saveURL(which) {
     const selbc=document.getElementById('backCustoSheetSelect'); if(selbc) selbc.innerHTML='';
     if(typeof initBackCustoPage==='function') initBackCustoPage();
   }
+  else if(which==='backprodpe'){ API_BACKPRODPE=val; _lsSet(key,val); }
   else                        { API_OFICINA=val; _lsSet(key,val); }
   const st = document.getElementById(stId);
   st.textContent='✓ Salvo'; st.style.color='var(--green)';
@@ -723,14 +736,15 @@ function saveURL(which) {
   }
 }
 function clearURL(which) {
-  const id   = which==='vendas'?'apiUrl': which==='aval'?'apiUrl2': which==='acomp'?'apiUrl3': which==='estoque'?'apiUrl4': which==='backcusto'?'apiUrl6':'apiUrl5';
-  const key  = which==='vendas'?'v1_vendas': which==='aval'?'v1_aval': which==='acomp'?'v1_acomp': which==='estoque'?'v1_estoque': which==='backcusto'?'v1_backcusto':'v1_oficina';
-  const stId = which==='vendas'?'st-vendas': which==='aval'?'st-aval': which==='acomp'?'st-acomp': which==='estoque'?'st-estoque': which==='backcusto'?'st-backcusto':'st-oficina';
+  const id   = which==='vendas'?'apiUrl': which==='aval'?'apiUrl2': which==='acomp'?'apiUrl3': which==='estoque'?'apiUrl4': which==='backcusto'?'apiUrl6': which==='backprodpe'?'apiUrl7':'apiUrl5';
+  const key  = which==='vendas'?'v1_vendas': which==='aval'?'v1_aval': which==='acomp'?'v1_acomp': which==='estoque'?'v1_estoque': which==='backcusto'?'v1_backcusto': which==='backprodpe'?'v1_backprodpe':'v1_oficina';
+  const stId = which==='vendas'?'st-vendas': which==='aval'?'st-aval': which==='acomp'?'st-acomp': which==='estoque'?'st-estoque': which==='backcusto'?'st-backcusto': which==='backprodpe'?'st-backprodpe':'st-oficina';
   if(which==='vendas')      { API_VENDAS=''; }
   else if(which==='aval')   { API_AVAL=''; }
   else if(which==='acomp')  { API_ACOMP=''; }
   else if(which==='estoque'){ API_ESTOQUE=''; }
   else if(which==='backcusto'){ API_BACKCUSTO=''; }
+  else if(which==='backprodpe'){ API_BACKPRODPE=''; }
   else                      { API_OFICINA=''; }
   _lsRm(key);
   document.getElementById(id).value='';
