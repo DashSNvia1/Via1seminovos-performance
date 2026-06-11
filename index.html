@@ -156,6 +156,9 @@ td:last-child{border-right:none}
 ::-webkit-scrollbar{width:5px;height:5px}
 ::-webkit-scrollbar-track{background:#f0efe9}
 ::-webkit-scrollbar-thumb{background:#c8c7be;border-radius:3px}
+/* ── Column resizer ─────────────────────────────────────────────── */
+.col-rh{position:absolute;right:0;top:0;width:5px;height:100%;cursor:col-resize;z-index:2;opacity:0;transition:opacity .12s;border-radius:0 2px 2px 0}
+th:hover .col-rh,.col-rh:hover,.col-rh.rh-drag{opacity:1;background:rgba(255,255,255,.35)}
 </style>
 </head>
 <body>
@@ -422,6 +425,17 @@ td:last-child{border-right:none}
   </div>
 </div>
 
+<!-- AGING OFICINA PAGE -->
+<div id="pageAgingOficina" style="display:none">
+  <div style="background:#fff;border-bottom:1px solid var(--border);padding:6px 20px;display:flex;align-items:center;gap:8px">
+    <span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Aba:</span>
+    <select class="sheet-select" id="agingOficinaSheetSelect" onchange="loadAgingOficinaSheet(this.value)" style="min-width:200px"></select>
+  </div>
+  <div style="padding:16px 20px 60px" id="aging-oficina-body">
+    <div style="padding:2rem;color:var(--muted)">Configure a URL da API de Estoque nas configurações (⚙) para carregar esta aba.</div>
+  </div>
+</div>
+
 <!-- VENDA TOP 10 PAGE -->
 <div id="pageVendaTop10" style="display:none">
   <div style="background:#fff;border-bottom:1px solid var(--border);padding:6px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
@@ -469,7 +483,7 @@ td:last-child{border-right:none}
     <div style="display:flex;align-items:center;gap:6px;margin-left:8px">
       <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Dias úteis:</label>
       <input type="number" id="oficina-dias-uteis" value="22" min="1" max="31"
-        onchange="renderOficina()"
+        onchange="oficinaSetDias()"
         style="width:52px;border:1px solid var(--border2);border-radius:3px;padding:5px 6px;font-size:12px;font-weight:700;text-align:center">
     </div>
     <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
@@ -497,6 +511,7 @@ td:last-child{border-right:none}
   <div class="ptab" id="ptAcomp" data-page="acomp" draggable="true">Acompanhamento de Vendas</div>
   <div class="ptab" id="ptEstoque" data-page="estoque" draggable="true">Estoque</div>
   <div class="ptab" id="ptAgingEstoque" data-page="aging-estoque" draggable="true">Aging Estoque</div>
+  <div class="ptab" id="ptAgingOficina" data-page="aging-oficina" draggable="true">Aging Oficina</div>
   <div class="ptab" id="ptOficina" data-page="oficina" draggable="true">Oficina</div>
   <div class="ptab" id="ptBackCusto" data-page="back-custo" draggable="true">Back - Custo</div>
   <div class="ptab" id="ptVendaTop10" data-page="venda-top10" draggable="true">Venda Top 10</div>
@@ -694,6 +709,9 @@ function saveURL(which) {
   else if(which==='estoque') {
     const sel1 = document.getElementById('estoqueSheetSelect');
     const sel2 = document.getElementById('agingEstoqueSheetSelect');
+    const sel2b = document.getElementById('agingOficinaSheetSelect');
+    if(sel2b) sel2b.innerHTML = '';
+    if(typeof initAgingOficinaPage === 'function') setTimeout(initAgingOficinaPage, 0);
     if(sel1) sel1.innerHTML = '';
     if(sel2) sel2.innerHTML = '';
     initEstoquePage();
@@ -732,6 +750,7 @@ function switchPage(page) {
   const _pa=document.getElementById('pageAcomp');if(_pa)_pa.style.display=page==='acomp'?'block':'none';
   const _pe=document.getElementById('pageEstoque');if(_pe)_pe.style.display=page==='estoque'?'block':'none';
   const _pae=document.getElementById('pageAgingEstoque');if(_pae)_pae.style.display=page==='aging-estoque'?'block':'none';
+  const _pao=document.getElementById('pageAgingOficina');if(_pao)_pao.style.display=page==='aging-oficina'?'block':'none';
   const _po=document.getElementById('pageOficina');if(_po)_po.style.display=page==='oficina'?'block':'none';
   const _pbc=document.getElementById('pageBackCusto');if(_pbc)_pbc.style.display=page==='back-custo'?'block':'none';
   const _pvt=document.getElementById('pageVendaTop10');if(_pvt)_pvt.style.display=page==='venda-top10'?'block':'none';
@@ -745,6 +764,7 @@ function switchPage(page) {
   const _pta=document.getElementById('ptAcomp');if(_pta)_pta.classList.toggle('active',page==='acomp');
   const _pte=document.getElementById('ptEstoque');if(_pte)_pte.classList.toggle('active',page==='estoque');
   const _ptae=document.getElementById('ptAgingEstoque');if(_ptae)_ptae.classList.toggle('active',page==='aging-estoque');
+  const _ptao=document.getElementById('ptAgingOficina');if(_ptao)_ptao.classList.toggle('active',page==='aging-oficina');
   const _pto=document.getElementById('ptOficina');if(_pto)_pto.classList.toggle('active',page==='oficina');
   const _ptbc=document.getElementById('ptBackCusto');if(_ptbc)_ptbc.classList.toggle('active',page==='back-custo');
   const _ptvt=document.getElementById('ptVendaTop10');if(_ptvt)_ptvt.classList.toggle('active',page==='venda-top10');
@@ -752,6 +772,7 @@ function switchPage(page) {
   if(page==='back-custo') initBackCustoPage();
   if(page==='venda-top10') initVendaTop10Page();
   if(page==='aging-estoque') initAgingEstoquePage();
+  if(page==='aging-oficina') initAgingOficinaPage();
   const dt = document.getElementById('avalDashType');
   if(dt) dt.value = page==='colab'?'colab':'geral';
   if(page==='aval' && !avalData) loadAval();
@@ -4370,10 +4391,289 @@ function toggleAgingEstoqueDetail(id, row) {
   if(!det) return;
   const open=det.style.display==='none'||det.style.display==='';
   det.style.display=open?'table-row':'none';
-  if(icon) icon.textContent=open?'⊟':'⊞';
+  if(icon) icon.textContent=open?'\u229f':'\u229e';
 }
 
-// ── VENDA TOP 10 ──────────────────────────────────────────────────────────────
+// \u2500\u2500 AGING OFICINA \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// Base: API_ESTOQUE \u2014 exibe APENAS carros com estoque OFICINA.
+// Faixas: 00~05, 05~10, 10~15, 15~20, 20~30 e >30 dias (nada fica de fora).
+
+let _agingOfRawRows = [];
+let _agingOfSelectedLojas = new Set();
+let _agingOfAllLojas = [];
+
+function initAgingOficinaPage() {
+  if(!API_ESTOQUE) {
+    document.getElementById('aging-oficina-body').innerHTML=
+      '<div style="padding:2rem;color:var(--muted)">Configure a URL da API de Estoque nas configura\u00e7\u00f5es (\u2699).</div>';
+    return;
+  }
+  const sel=document.getElementById('agingOficinaSheetSelect');
+  if(!sel) return;
+  if(sel.options.length>1){ if(sel.value) loadAgingOficinaSheet(sel.value); return; }
+  sel.innerHTML='<option>Carregando abas...</option>';
+  jsonp(API_ESTOQUE,{sheet:'__sheets__'}).then(data=>{
+    const sheets=data.sheets||[];
+    sel.innerHTML=sheets.map(s=>'<option value="'+s+'">'+s+'</option>').join('');
+    if(sel.options.length){ sel.value=sel.options[0].value; loadAgingOficinaSheet(sel.value); }
+  }).catch(()=>{ sel.innerHTML='<option>Erro ao carregar abas</option>'; });
+}
+
+async function loadAgingOficinaSheet(name) {
+  const body=document.getElementById('aging-oficina-body');
+  body.innerHTML='<div style="padding:2rem;text-align:center;color:var(--muted)"><div class="spin2" style="margin:0 auto 8px"></div>Carregando...</div>';
+  try {
+    const data=await jsonp(API_ESTOQUE,{sheet:name});
+    if(data.error) throw new Error(data.error);
+    const headers=data.headers||[];
+    const diasCol = headers[20]||'DiasEstoque';
+    const estoCol = data.estoqueCol||headers[31]||'ESTOQUE';
+    const vcKey   = headers[10]||'Valor Compra';
+
+    const allRows=(data.rows||[]).map(r=>({
+      modelo:      extractFamily(String(r['MODELO']||r['Modelo']||'').trim()),
+      modeloFull:  String(r['MODELO']||r['Modelo']||'').trim(),
+      loja:        String(r['EMPRESA']||r['Empresa']||'').trim().toUpperCase(),
+      placa:       String(r['PLACA']||r['Placa']||'').trim().toUpperCase(),
+      tipo:        String(r[estoCol]||'').trim(),
+      dias:        toNum(r[diasCol]||0),
+      km:          toNum(r['KM']||r['Km']||0),
+      valorCompra: toNum(r[vcKey]||0),
+    })).filter(r=>r.modelo);
+
+    _agingOfRawRows=allRows.filter(r=>r.tipo.toUpperCase().includes('OFICINA'));
+    _agingOfAllLojas=[...new Set(_agingOfRawRows.map(r=>r.loja).filter(Boolean))].sort();
+    _agingOfSelectedLojas=new Set(_agingOfAllLojas);
+
+    renderAgingOficina();
+  } catch(e) {
+    body.innerHTML='<div style="padding:2rem;color:var(--red)">Erro: '+e.message+'</div>';
+  }
+}
+
+function _getAgingOficinaFiltered() {
+  return _agingOfRawRows.filter(r=>_agingOfSelectedLojas.has(r.loja));
+}
+
+function toggleAgingOficinaLoja(loja) {
+  if(_agingOfSelectedLojas.has(loja)) _agingOfSelectedLojas.delete(loja);
+  else _agingOfSelectedLojas.add(loja);
+  document.querySelectorAll('.ao-loja-cb').forEach(cb=>{if(cb.dataset.loja===loja)cb.checked=_agingOfSelectedLojas.has(loja);});
+  _applyAgingOficinaFilters();
+}
+function toggleTodasAgingOficinaLojas(checked) {
+  document.querySelectorAll('.ao-loja-cb').forEach(cb=>{
+    cb.checked=checked;
+    if(checked)_agingOfSelectedLojas.add(cb.dataset.loja);
+    else _agingOfSelectedLojas.delete(cb.dataset.loja);
+  });
+  _applyAgingOficinaFilters();
+}
+function toggleAoLojaDropdown(){const dd=document.getElementById('aoLojaDropdown');if(dd)dd.style.display=dd.style.display==='none'?'block':'none';}
+
+function _applyAgingOficinaFilters() {
+  const lbL=document.getElementById('aoLojaLabel');
+  if(lbL)lbL.textContent=_agingOfSelectedLojas.size===_agingOfAllLojas.length?'Todas':_agingOfSelectedLojas.size+' selecionada'+(_agingOfSelectedLojas.size>1?'s':'');
+  _renderAgingOficinaContent(_getAgingOficinaFiltered());
+}
+
+function renderAgingOficina() {
+  const body=document.getElementById('aging-oficina-body'); if(!body) return;
+
+  if(!_agingOfRawRows.length){
+    body.innerHTML='<div style="padding:2rem;color:var(--muted)">Nenhum carro com estoque <b>Oficina</b> encontrado nesta aba.</div>';
+    return;
+  }
+
+  const filtered=_getAgingOficinaFiltered();
+  const labelLojas=_agingOfSelectedLojas.size===_agingOfAllLojas.length?'Todas':_agingOfSelectedLojas.size+' selecionada'+(_agingOfSelectedLojas.size>1?'s':'');
+
+  const lojaOpts=_agingOfAllLojas.map(l=>'<label style="display:flex;align-items:center;gap:10px;padding:7px 14px;cursor:pointer;border-bottom:1px solid #f5f4f0;font-size:11px" onmouseenter="this.style.background=\'#f5f4f0\'" onmouseleave="this.style.background=\'\'">'+
+    '<input type="checkbox" class="ao-loja-cb" data-loja="'+l+'" checked onchange="toggleAgingOficinaLoja(\''+l.replace(/'/g,"\\'")+'\')">'+
+    '<span style="flex:1">'+l+'</span></label>').join('');
+
+  body.innerHTML=
+    '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">'+
+      '<span style="display:inline-flex;align-items:center;gap:6px;background:#1e1e1e;color:#fff;border-radius:3px;padding:7px 14px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px">Estoque: Oficina</span>'+
+      '<div id="aoLojaWrap" style="position:relative;display:inline-block">'+
+        '<button onclick="toggleAoLojaDropdown()" style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--border);border-radius:3px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;min-width:200px;justify-content:space-between">'+
+          '<span>Por Loja</span><span id="aoLojaLabel" style="color:var(--muted);font-weight:400">'+labelLojas+'</span><span style="font-size:10px;color:var(--muted)">\u25bc</span>'+
+        '</button>'+
+        '<div id="aoLojaDropdown" style="display:none;position:absolute;top:100%;left:0;z-index:999;background:#fff;border:1px solid var(--border);border-radius:3px;box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:280px;max-height:280px;overflow-y:auto;margin-top:2px">'+
+          '<div style="padding:8px 12px;border-bottom:1px solid var(--border)"><span style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Sele\u00e7\u00f5es m\u00faltiplas</span></div>'+
+          '<label style="display:flex;align-items:center;gap:10px;padding:8px 14px;cursor:pointer;border-bottom:1px solid #e0dfd8;font-size:12px;font-weight:600" onmouseenter="this.style.background=\'#f5f4f0\'" onmouseleave="this.style.background=\'\'">'+
+            '<input type="checkbox" id="aoLojaAll" checked onchange="toggleTodasAgingOficinaLojas(this.checked)"><span>Todas as lojas</span>'+
+          '</label>'+lojaOpts+
+        '</div>'+
+      '</div>'+
+    '</div>'+
+    '<div id="ao-content"></div>';
+
+  setTimeout(()=>{
+    document.addEventListener('click', function _aocd(e){
+      const w=document.getElementById('aoLojaWrap');
+      if(w&&!w.contains(e.target)){const dd=document.getElementById('aoLojaDropdown');if(dd)dd.style.display='none';}
+    });
+  },100);
+
+  _renderAgingOficinaContent(filtered);
+}
+
+function _renderAgingOficinaContent(rows) {
+  const body=document.getElementById('ao-content'); if(!body) return;
+
+  const FAIXAS=['(1) 00 ~ 05 dias','(2) 05 ~ 10 dias','(3) 10 ~ 15 dias','(4) 15 ~ 20 dias','(5) 20 ~ 30 dias','(6) > 30 dias'];
+  const COLORS=['#00897b','#2e7d32','#1565c0','#c8921a','#ef6c00','#c62828'];
+  const faixaOf = d => {
+    if(d<5)            return FAIXAS[0];
+    if(d>=5 && d<=10)  return FAIXAS[1];
+    if(d>10 && d<=15)  return FAIXAS[2];
+    if(d>15 && d<=20)  return FAIXAS[3];
+    if(d>20 && d<=30)  return FAIXAS[4];
+    return FAIXAS[5];
+  };
+  const faixaMap={};
+  FAIXAS.forEach(f=>{ faixaMap[f]={label:f,qtd:0,valorSum:0,kmSum:0,rows:[],mods:{}}; });
+
+  rows.forEach(r=>{
+    const fm=faixaMap[faixaOf(r.dias)];
+    fm.qtd++; fm.valorSum+=r.valorCompra; fm.kmSum+=r.km; fm.rows.push(r);
+    if(!fm.mods[r.modelo]) fm.mods[r.modelo]={qtd:0,valorSum:0,kmSum:0,rows:[]};
+    fm.mods[r.modelo].qtd++; fm.mods[r.modelo].valorSum+=r.valorCompra;
+    fm.mods[r.modelo].kmSum+=r.km; fm.mods[r.modelo].rows.push(r);
+  });
+
+  const totQtd=rows.length;
+  const totValor=rows.reduce((s,r)=>s+r.valorCompra,0);
+  const totTKM=totQtd?totValor/totQtd:0;
+
+  const fmtV=v=>v>0?'R$ '+Math.round(v).toLocaleString('pt-BR'):'\u2014';
+  const fmtN=v=>v>0?Math.round(v).toLocaleString('pt-BR'):'\u2014';
+  const th='background:#1e1e1e;color:#fff;padding:9px 14px;font-size:10px;text-transform:uppercase;letter-spacing:.5px;font-weight:700;text-align:';
+
+  let html=
+  '<div style="margin-bottom:24px;border:1px solid var(--border);border-radius:3px;overflow:hidden">'+
+    '<table style="width:100%;border-collapse:collapse;table-layout:fixed">'+
+      '<colgroup><col style="width:40%"><col style="width:20%"><col style="width:20%"><col style="width:20%"></colgroup>'+
+      '<thead><tr>'+
+        '<th style="'+th+'left">Faixa Oficina</th>'+
+        '<th style="'+th+'right">Total Estoque</th>'+
+        '<th style="'+th+'right">Valor Compra</th>'+
+        '<th style="'+th+'right">TKM Estoque</th>'+
+      '</tr></thead>'+
+      '<tbody>'+
+        FAIXAS.map((f,fi)=>{
+          const fm=faixaMap[f];
+          const tkm=fm.qtd?fm.valorSum/fm.qtd:0;
+          return '<tr style="background:'+(fi%2===0?'#fff':'#fafaf8')+';border-bottom:1px solid var(--border)">'+
+            '<td style="padding:9px 14px;font-weight:600">'+
+              '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+COLORS[fi]+';margin-right:8px"></span>'+f+
+            '</td>'+
+            '<td style="padding:9px 14px;text-align:right;font-weight:700">'+fmtN(fm.qtd)+'</td>'+
+            '<td style="padding:9px 14px;text-align:right">'+fmtV(fm.valorSum)+'</td>'+
+            '<td style="padding:9px 14px;text-align:right">'+fmtV(tkm)+'</td>'+
+          '</tr>';
+        }).join('')+
+        '<tr style="background:#111;color:#fff">'+
+          '<td style="padding:9px 14px;font-weight:700">Total</td>'+
+          '<td style="padding:9px 14px;text-align:right;font-weight:700">'+fmtN(totQtd)+'</td>'+
+          '<td style="padding:9px 14px;text-align:right;font-weight:700">'+fmtV(totValor)+'</td>'+
+          '<td style="padding:9px 14px;text-align:right;font-weight:700">'+fmtV(totTKM)+'</td>'+
+        '</tr>'+
+      '</tbody>'+
+    '</table>'+
+  '</div>';
+
+  FAIXAS.forEach((f,fi)=>{
+    const fm=faixaMap[f]; if(!fm.qtd) return;
+    const mods=Object.entries(fm.mods).sort((a,b)=>b[1].qtd-a[1].qtd);
+    const maxVol=mods.reduce((m,r)=>Math.max(m,r[1].qtd),1);
+    html+=
+    '<div style="margin-bottom:20px">'+
+      '<div style="background:#1e1e1e;color:#fff;padding:8px 14px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;border-radius:3px 3px 0 0;display:flex;align-items:center;gap:8px">'+
+        '<span style="width:8px;height:8px;border-radius:50%;background:'+COLORS[fi]+';display:inline-block"></span>'+
+        f+' \u2014 '+fm.qtd+' unidades'+
+      '</div>'+
+      '<div class="tbl-wrap" style="border-radius:0 0 3px 3px">'+
+        '<table style="width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed">'+
+          '<colgroup><col style="width:50px"><col><col style="width:90px"><col style="width:140px"><col style="width:120px"></colgroup>'+
+          '<thead><tr style="background:#2a2a2a;color:#fff">'+
+            '<th style="padding:8px 12px;text-align:center;font-size:10px;text-transform:uppercase;letter-spacing:.5px">#</th>'+
+            '<th style="padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.5px">Modelo</th>'+
+            '<th style="padding:8px 12px;text-align:center;font-size:10px;text-transform:uppercase;letter-spacing:.5px">Qtd.</th>'+
+            '<th style="padding:8px 12px;text-align:right;font-size:10px;text-transform:uppercase;letter-spacing:.5px">Valor Compra</th>'+
+            '<th style="padding:8px 12px;text-align:right;font-size:10px;text-transform:uppercase;letter-spacing:.5px">TKM</th>'+
+          '</tr></thead>'+
+          '<tbody>'+
+            mods.map(([mod,md],mi)=>{
+              const tkm=md.qtd?md.valorSum/md.qtd:0;
+              const bw=Math.round((md.qtd/maxVol)*80);
+              const detId='ao_'+fi+'_'+mi;
+              const detRows=md.rows.map((r,ri)=>
+                '<tr style="background:#f5f4f0;border-bottom:1px solid var(--border)">'+
+                  '<td style="padding:5px 10px;text-align:center;color:var(--muted);font-size:11px">'+(ri+1)+'</td>'+
+                  '<td style="padding:5px 10px;color:var(--muted);font-size:11px">'+r.loja+'</td>'+
+                  '<td style="padding:5px 10px;color:var(--muted);font-size:11px">'+(r.placa||'\u2014')+'</td>'+
+                  '<td style="padding:5px 10px;color:var(--muted);font-size:11px">'+r.modeloFull+'</td>'+
+                  '<td style="padding:5px 10px;text-align:center;color:var(--muted);font-size:11px">'+r.dias+' dias</td>'+
+                  '<td style="padding:5px 10px;text-align:right;color:var(--muted);font-size:11px">'+(r.km?r.km.toLocaleString('pt-BR')+'km':'\u2014')+'</td>'+
+                  '<td style="padding:5px 10px;text-align:right;color:var(--muted);font-size:11px">'+fmtV(r.valorCompra)+'</td>'+
+                '</tr>').join('');
+              return ''+
+              '<tr style="background:'+(mi%2===0?'#fafaf8':'#fff')+';border-bottom:1px solid var(--border);cursor:pointer" onclick="toggleAgingOficinaDetail(\''+detId+'\',this)">'+
+                '<td style="padding:7px 12px;text-align:center">'+
+                  '<span id="ao_eb_'+detId+'" style="font-size:11px;color:#888">\u229e</span>'+
+                  '<span style="font-weight:700;color:'+(mi===0?'#c8921a':mi===1?'#9ba0a8':mi===2?'#b87f5a':'#bbb')+';font-size:11px;margin-left:4px">'+(mi+1)+'</span>'+
+                '</td>'+
+                '<td style="padding:7px 12px;font-weight:600">'+
+                  '<div style="display:flex;align-items:center;gap:10px">'+
+                    (mod.charAt(0)+mod.slice(1).toLowerCase())+
+                    '<div style="background:#e8e7e0;border-radius:2px;height:5px;width:80px;overflow:hidden;flex-shrink:0">'+
+                      '<div style="width:'+bw+'px;background:'+COLORS[fi]+';height:100%;border-radius:2px"></div>'+
+                    '</div>'+
+                    '<span style="font-weight:700;font-size:12px;color:var(--ink)">'+md.qtd+'</span>'+
+                  '</div>'+
+                '</td>'+
+                '<td style="padding:7px 12px;text-align:center;font-weight:700">'+md.qtd+'</td>'+
+                '<td style="padding:7px 12px;text-align:right">'+fmtV(md.valorSum)+'</td>'+
+                '<td style="padding:7px 12px;text-align:right">'+fmtV(tkm)+'</td>'+
+              '</tr>'+
+              '<tr id="ao_det_'+detId+'" style="display:none">'+
+                '<td colspan="5" style="padding:0;background:#f5f4f0">'+
+                  '<table style="width:100%;border-collapse:collapse;font-size:11px">'+
+                    '<thead><tr style="background:#e0dfd8">'+
+                      '<th style="padding:5px 10px;text-align:center">#</th>'+
+                      '<th style="padding:5px 10px;text-align:left">Loja</th>'+
+                      '<th style="padding:5px 10px;text-align:left">Placa</th>'+
+                      '<th style="padding:5px 10px;text-align:left">Modelo</th>'+
+                      '<th style="padding:5px 10px;text-align:center">Dias</th>'+
+                      '<th style="padding:5px 10px;text-align:right">KM</th>'+
+                      '<th style="padding:5px 10px;text-align:right">Valor Compra</th>'+
+                    '</tr></thead>'+
+                    '<tbody>'+detRows+'</tbody>'+
+                  '</table>'+
+                '</td>'+
+              '</tr>';
+            }).join('')+
+          '</tbody>'+
+        '</table>'+
+      '</div>'+
+    '</div>';
+  });
+
+  body.innerHTML=html;
+}
+
+function toggleAgingOficinaDetail(id, row) {
+  const det=document.getElementById('ao_det_'+id);
+  const icon=document.getElementById('ao_eb_'+id);
+  if(!det) return;
+  const open=det.style.display==='none'||det.style.display==='';
+  det.style.display=open?'table-row':'none';
+  if(icon) icon.textContent=open?'\u229f':'\u229e';
+}
+
+// \u2500\u2500 VENDA TOP 10 ──────────────────────────────────────────────────────────────
 let _top10SelectedLojas = new Set();
 let _top10AllLojas = [];
 
@@ -4547,6 +4847,13 @@ function renderVendaTop10() {
 
 // ── OFICINA ───────────────────────────────────────────────────────────────────
 let _oficinaRawData = [];
+let _oficinaSheet = '';
+// Salva o valor de dias úteis digitado para o mês atual e re-renderiza
+function oficinaSetDias(){
+  const di=document.getElementById('oficina-dias-uteis');
+  if(di && _oficinaSheet) _lsSet('v1_ofdias_'+_oficinaSheet, di.value);
+  renderOficina();
+}
 
 function initOficinaPage() {
   if(!API_OFICINA) {
@@ -4576,6 +4883,10 @@ function loadOficinaSheet(name) {
   jsonp(API_OFICINA, {sheet:name}).then(data => {
     if(data.error) throw new Error(data.error);
     _oficinaRawData = data.rows || [];
+    _oficinaSheet = name;
+    // Dias úteis: usa o valor salvo para este mês; senão 22 (digitado pelo usuário)
+    const _di = document.getElementById('oficina-dias-uteis');
+    if(_di){ const _sv=_ls('v1_ofdias_'+name, ''); _di.value = (_sv!=='') ? _sv : '22'; }
     // Populate empresa filter
     const empresas = [...new Set(_oficinaRawData.map(r => String(r['Empresa_Nome']||'').trim()).filter(Boolean))].sort();
     const sel = document.getElementById('oficina-empresa-sel');
@@ -4920,6 +5231,47 @@ function renderBackCustoTable() {
 
   tblBox.innerHTML = h;
 }
+
+// ── REDIMENSIONADOR DE COLUNAS (global — todas as abas) ───────────────────────
+(function(){
+  var _rs=null;
+  function apply(tbl){
+    if(!tbl||tbl._rsOk)return; tbl._rsOk=1;
+    tbl.querySelectorAll('thead th').forEach(function(th){
+      if(th.querySelector('.col-rh'))return;
+      th.style.position='relative'; th.style.overflow='visible';
+      var h=document.createElement('div'); h.className='col-rh'; th.appendChild(h);
+    });
+  }
+  document.addEventListener('mousedown',function(e){
+    if(!e.target.classList.contains('col-rh'))return;
+    e.preventDefault(); e.target.classList.add('rh-drag');
+    var th=e.target.parentElement;
+    _rs={th:th,hd:e.target,x:e.clientX,w:th.getBoundingClientRect().width};
+  },true);
+  document.addEventListener('mousemove',function(e){
+    if(!_rs)return;
+    var w=Math.max(40,_rs.w+e.clientX-_rs.x);
+    _rs.th.style.width=w+'px'; _rs.th.style.minWidth=w+'px';
+  });
+  document.addEventListener('mouseup',function(){
+    if(!_rs)return; _rs.hd.classList.remove('rh-drag'); _rs=null;
+  });
+  var obs=new MutationObserver(function(muts){
+    muts.forEach(function(m){
+      m.addedNodes.forEach(function(n){
+        if(n.nodeType!==1)return;
+        if(n.tagName==='TABLE')apply(n);
+        else if(n.querySelectorAll)n.querySelectorAll('table').forEach(apply);
+      });
+    });
+  });
+  function init(){
+    obs.observe(document.body,{childList:true,subtree:true});
+    document.querySelectorAll('table').forEach(apply);
+  }
+  if(document.body)init(); else document.addEventListener('DOMContentLoaded',init);
+})();
 // ─────────────────────────────────────────────────────────────────────────────
 </script>
 </body>
