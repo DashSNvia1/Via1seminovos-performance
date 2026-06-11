@@ -231,6 +231,15 @@ td:last-child{border-right:none}
       </div>
       <div class="config-status" id="st-oficina"></div>
     </div>
+    <div>
+      <div class="config-box-title">💰 Back - Custo</div>
+      <div class="config-row">
+        <input class="config-input" id="apiUrl6" type="text" placeholder="https://script.google.com/...">
+        <button class="btn-save" onclick="saveURL('backcusto')">Salvar</button>
+        <button class="btn-clear" onclick="clearURL('backcusto')">✕</button>
+      </div>
+      <div class="config-status" id="st-backcusto"></div>
+    </div>
   </div>
   <div class="config-hint">
     Cole a URL do Web App do Apps Script em cada campo e clique Salvar. As URLs ficam salvas no navegador.
@@ -442,6 +451,17 @@ td:last-child{border-right:none}
 </div>
 
 <!-- OFICINA PAGE -->
+<!-- BACK - CUSTO PAGE -->
+<div id="pageBackCusto" style="display:none">
+  <div style="background:#fff;border-bottom:1px solid var(--border);padding:6px 20px;display:flex;align-items:center;gap:8px">
+    <span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Aba:</span>
+    <select class="sheet-select" id="backCustoSheetSelect" onchange="loadBackCustoSheet(this.value)" style="min-width:200px"></select>
+  </div>
+  <div style="padding:16px 20px 60px" id="back-custo-body">
+    <div style="padding:2rem;color:var(--muted)">Configure a URL da API Back - Custo nas configurações (⚙) para carregar esta aba.</div>
+  </div>
+</div>
+
 <div id="pageOficina" style="display:none">
   <div style="background:#fff;border-bottom:1px solid var(--border);padding:6px 20px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Aba:</span>
@@ -478,6 +498,7 @@ td:last-child{border-right:none}
   <div class="ptab" id="ptEstoque" data-page="estoque" draggable="true">Estoque</div>
   <div class="ptab" id="ptAgingEstoque" data-page="aging-estoque" draggable="true">Aging Estoque</div>
   <div class="ptab" id="ptOficina" data-page="oficina" draggable="true">Oficina</div>
+  <div class="ptab" id="ptBackCusto" data-page="back-custo" draggable="true">Back - Custo</div>
   <div class="ptab" id="ptVendaTop10" data-page="venda-top10" draggable="true">Venda Top 10</div>
 </div>
 
@@ -606,6 +627,7 @@ let API_AVAL    = _ls('v1_aval',    URL_AVAL);
 let API_ACOMP   = _ls('v1_acomp',   'https://script.google.com/macros/s/AKfycbwi67zRTahAD7b_KbqIrH9d1g0FKETD5Ui-o4azwDL64W3Wdoo7NfmmIYyIy7wOh1SCuA/exec');
 let API_ESTOQUE = _ls('v1_estoque', 'https://script.google.com/macros/s/AKfycbzO8yYahoKvXi4LjVFOGzDciDkO2EDmqu605nuHmfdFZkswSLSrnJcm7MaLotbK5s-J/exec');
 let API_OFICINA = _ls('v1_oficina', 'https://script.google.com/macros/s/AKfycbxHt2EkEo7bIS04wb0lJLH_HfQ1tB84HWeghAMOrg2ogyCtyKH9KjU67lSLnN-xxXKt/exec');
+let API_BACKCUSTO = _ls('v1_backcusto', '');
 let store = {geral:[],bace:[],pepb:[]};
 let rawRows = {geral:[],bace:[],pepb:[]};
 let avalData = null;
@@ -622,11 +644,13 @@ window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('apiUrl3').value = API_ACOMP   || '';
   document.getElementById('apiUrl4').value = API_ESTOQUE || '';
   document.getElementById('apiUrl5').value = API_OFICINA || '';
+  document.getElementById('apiUrl6').value = API_BACKCUSTO || '';
   if(API_VENDAS)  { document.getElementById('st-vendas').textContent='✓ Configurado';  document.getElementById('st-vendas').style.color='var(--green)'; }
   if(API_AVAL)    { document.getElementById('st-aval').textContent='✓ Configurado';    document.getElementById('st-aval').style.color='var(--green)'; }
   if(API_ACOMP)   { document.getElementById('st-acomp').textContent='✓ Configurado';   document.getElementById('st-acomp').style.color='var(--green)'; }
   if(API_ESTOQUE) { document.getElementById('st-estoque').textContent='✓ Configurado'; document.getElementById('st-estoque').style.color='var(--green)'; }
   if(API_OFICINA) { document.getElementById('st-oficina').textContent='✓ Configurado'; document.getElementById('st-oficina').style.color='var(--green)'; }
+  if(API_BACKCUSTO) { document.getElementById('st-backcusto').textContent='✓ Configurado'; document.getElementById('st-backcusto').style.color='var(--green)'; }
   loadVendas();
 });
 
@@ -647,15 +671,19 @@ function jsonp(baseUrl, params) {
 // ── CONFIG ────────────────────────────────────────────────────────────────────
 function toggleConfig() { document.getElementById('configPanel').style.display = document.getElementById('configPanel').style.display==='block'?'none':'block'; }
 function saveURL(which) {
-  const id   = which==='vendas'?'apiUrl': which==='aval'?'apiUrl2': which==='acomp'?'apiUrl3': which==='estoque'?'apiUrl4':'apiUrl5';
-  const key  = which==='vendas'?'v1_vendas': which==='aval'?'v1_aval': which==='acomp'?'v1_acomp': which==='estoque'?'v1_estoque':'v1_oficina';
-  const stId = which==='vendas'?'st-vendas': which==='aval'?'st-aval': which==='acomp'?'st-acomp': which==='estoque'?'st-estoque':'st-oficina';
+  const id   = which==='vendas'?'apiUrl': which==='aval'?'apiUrl2': which==='acomp'?'apiUrl3': which==='estoque'?'apiUrl4': which==='backcusto'?'apiUrl6':'apiUrl5';
+  const key  = which==='vendas'?'v1_vendas': which==='aval'?'v1_aval': which==='acomp'?'v1_acomp': which==='estoque'?'v1_estoque': which==='backcusto'?'v1_backcusto':'v1_oficina';
+  const stId = which==='vendas'?'st-vendas': which==='aval'?'st-aval': which==='acomp'?'st-acomp': which==='estoque'?'st-estoque': which==='backcusto'?'st-backcusto':'st-oficina';
   const val  = document.getElementById(id).value.trim();
   if(!val) return alert('Cole a URL do Apps Script');
   if(which==='vendas')        { API_VENDAS=val;  _lsSet(key,val); }
   else if(which==='aval')     { API_AVAL=val;    _lsSet(key,val); }
   else if(which==='acomp')    { API_ACOMP=val;   _lsSet(key,val); }
   else if(which==='estoque')  { API_ESTOQUE=val; _lsSet(key,val); }
+  else if(which==='backcusto'){ API_BACKCUSTO=val; _lsSet(key,val);
+    const selbc=document.getElementById('backCustoSheetSelect'); if(selbc) selbc.innerHTML='';
+    if(typeof initBackCustoPage==='function') initBackCustoPage();
+  }
   else                        { API_OFICINA=val; _lsSet(key,val); }
   const st = document.getElementById(stId);
   st.textContent='✓ Salvo'; st.style.color='var(--green)';
@@ -677,13 +705,14 @@ function saveURL(which) {
   }
 }
 function clearURL(which) {
-  const id   = which==='vendas'?'apiUrl': which==='aval'?'apiUrl2': which==='acomp'?'apiUrl3': which==='estoque'?'apiUrl4':'apiUrl5';
-  const key  = which==='vendas'?'v1_vendas': which==='aval'?'v1_aval': which==='acomp'?'v1_acomp': which==='estoque'?'v1_estoque':'v1_oficina';
-  const stId = which==='vendas'?'st-vendas': which==='aval'?'st-aval': which==='acomp'?'st-acomp': which==='estoque'?'st-estoque':'st-oficina';
+  const id   = which==='vendas'?'apiUrl': which==='aval'?'apiUrl2': which==='acomp'?'apiUrl3': which==='estoque'?'apiUrl4': which==='backcusto'?'apiUrl6':'apiUrl5';
+  const key  = which==='vendas'?'v1_vendas': which==='aval'?'v1_aval': which==='acomp'?'v1_acomp': which==='estoque'?'v1_estoque': which==='backcusto'?'v1_backcusto':'v1_oficina';
+  const stId = which==='vendas'?'st-vendas': which==='aval'?'st-aval': which==='acomp'?'st-acomp': which==='estoque'?'st-estoque': which==='backcusto'?'st-backcusto':'st-oficina';
   if(which==='vendas')      { API_VENDAS=''; }
   else if(which==='aval')   { API_AVAL=''; }
   else if(which==='acomp')  { API_ACOMP=''; }
   else if(which==='estoque'){ API_ESTOQUE=''; }
+  else if(which==='backcusto'){ API_BACKCUSTO=''; }
   else                      { API_OFICINA=''; }
   _lsRm(key);
   document.getElementById(id).value='';
@@ -704,6 +733,7 @@ function switchPage(page) {
   const _pe=document.getElementById('pageEstoque');if(_pe)_pe.style.display=page==='estoque'?'block':'none';
   const _pae=document.getElementById('pageAgingEstoque');if(_pae)_pae.style.display=page==='aging-estoque'?'block':'none';
   const _po=document.getElementById('pageOficina');if(_po)_po.style.display=page==='oficina'?'block':'none';
+  const _pbc=document.getElementById('pageBackCusto');if(_pbc)_pbc.style.display=page==='back-custo'?'block':'none';
   const _pvt=document.getElementById('pageVendaTop10');if(_pvt)_pvt.style.display=page==='venda-top10'?'block':'none';
   document.getElementById('filterBar').style.display   = page==='vendas'&&document.getElementById('sheetSelect').options.length>0?'flex':'none';
   document.getElementById('avalFilterBar').style.display = isAval?'flex':'none';
@@ -716,8 +746,10 @@ function switchPage(page) {
   const _pte=document.getElementById('ptEstoque');if(_pte)_pte.classList.toggle('active',page==='estoque');
   const _ptae=document.getElementById('ptAgingEstoque');if(_ptae)_ptae.classList.toggle('active',page==='aging-estoque');
   const _pto=document.getElementById('ptOficina');if(_pto)_pto.classList.toggle('active',page==='oficina');
+  const _ptbc=document.getElementById('ptBackCusto');if(_ptbc)_ptbc.classList.toggle('active',page==='back-custo');
   const _ptvt=document.getElementById('ptVendaTop10');if(_ptvt)_ptvt.classList.toggle('active',page==='venda-top10');
   if(page==='oficina') initOficinaPage();
+  if(page==='back-custo') initBackCustoPage();
   if(page==='venda-top10') initVendaTop10Page();
   if(page==='aging-estoque') initAgingEstoquePage();
   const dt = document.getElementById('avalDashType');
@@ -4660,6 +4692,233 @@ function renderOficina() {
     +'</tr></tbody></table>';
 
   document.getElementById('oficina-table').innerHTML = h;
+}
+
+// ── BACK - CUSTO ──────────────────────────────────────────────────────────────
+// Base: planilha "Back Custo - IPVA/TRANS" via API_BACKCUSTO.
+// Agrupa por Tipo de Título (col K): Qtd, Valor (S), Saldo (T), Pago (U).
+// Filtros: Empresa (col B, multi) e Departamento (col F, um ou ambos).
+
+let _bcRawRows = [];
+let _bcAllLojas = [];
+let _bcSelectedLojas = new Set();
+let _bcAllDeptos = [];
+let _bcSelectedDeptos = new Set();
+
+function _bcNum(v){
+  if(typeof v === 'number') return isNaN(v)?0:v;
+  let s = String(v==null?'':v).trim();
+  if(!s) return 0;
+  s = s.replace(/R\$\s?/,'').replace(/\./g,'').replace(',','.');
+  const n = parseFloat(s);
+  return isNaN(n)?0:n;
+}
+
+function initBackCustoPage() {
+  const body = document.getElementById('back-custo-body');
+  if(!API_BACKCUSTO) {
+    body.innerHTML = '<div style="padding:2rem;color:var(--muted)">Configure a URL da API <b>Back - Custo</b> nas configurações (⚙).</div>';
+    return;
+  }
+  const sel = document.getElementById('backCustoSheetSelect');
+  if(!sel) return;
+  if(sel.options.length > 1) { if(sel.value) loadBackCustoSheet(sel.value); return; }
+  sel.innerHTML = '<option>Carregando abas...</option>';
+  jsonp(API_BACKCUSTO, {sheet:'__sheets__'}).then(data => {
+    const sheets = data.sheets || [];
+    sel.innerHTML = sheets.map(s => '<option value="'+s+'">'+s+'</option>').join('');
+    if(sel.options.length) { sel.value = sel.options[0].value; loadBackCustoSheet(sel.value); }
+  }).catch(() => { sel.innerHTML = '<option>Erro ao carregar abas</option>'; });
+}
+
+async function loadBackCustoSheet(name) {
+  const body = document.getElementById('back-custo-body');
+  body.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--muted)"><div class="spin2" style="margin:0 auto 8px"></div>Carregando...</div>';
+  try {
+    const data = await jsonp(API_BACKCUSTO, {sheet:name});
+    if(data.error) throw new Error(data.error);
+    _bcRawRows = (data.rows||[]).map(r => ({
+      emp:   String(r['TituloEmpresaNome']||'').trim(),
+      depto: String(r['TituloDeptoDescr']||'').trim(),
+      tipo:  String(r['TipoTituloDescr']||'').trim(),
+      valor: _bcNum(r['TituloValor']),
+      saldo: _bcNum(r['TituloSaldo']),
+      pago:  _bcNum(r['TitPago'])
+    })).filter(r => r.tipo || r.emp);
+
+    _bcAllLojas = [...new Set(_bcRawRows.map(r=>r.emp).filter(Boolean))].sort();
+    _bcSelectedLojas = new Set(_bcAllLojas);
+    _bcAllDeptos = [...new Set(_bcRawRows.map(r=>r.depto).filter(Boolean))].sort();
+    _bcSelectedDeptos = new Set(_bcAllDeptos);
+
+    renderBackCusto();
+  } catch(e) {
+    body.innerHTML = '<div style="padding:2rem;color:var(--red)">Erro: '+e.message+'</div>';
+  }
+}
+
+function _bcFiltered() {
+  return _bcRawRows.filter(r =>
+    (!r.emp || _bcSelectedLojas.has(r.emp)) &&
+    (!r.depto || _bcSelectedDeptos.has(r.depto))
+  );
+}
+
+function toggleBcLoja(loja) {
+  if(_bcSelectedLojas.has(loja)) _bcSelectedLojas.delete(loja); else _bcSelectedLojas.add(loja);
+  document.querySelectorAll('.bc-loja-cb').forEach(cb => { if(cb.dataset.loja===loja) cb.checked=_bcSelectedLojas.has(loja); });
+  _applyBcFilters();
+}
+function toggleTodasBcLojas(checked) {
+  document.querySelectorAll('.bc-loja-cb').forEach(cb => {
+    cb.checked = checked;
+    if(checked) _bcSelectedLojas.add(cb.dataset.loja); else _bcSelectedLojas.delete(cb.dataset.loja);
+  });
+  _applyBcFilters();
+}
+function toggleBcLojaDD() { const dd=document.getElementById('bcLojaDD'); if(dd) dd.style.display=dd.style.display==='none'?'block':'none'; }
+
+function toggleBcDepto(d) {
+  // Permite selecionar um por vez ou ambos; impede desmarcar o último
+  if(_bcSelectedDeptos.has(d)) {
+    if(_bcSelectedDeptos.size <= 1) return _applyBcFilters(); // mantém pelo menos um
+    _bcSelectedDeptos.delete(d);
+  } else {
+    _bcSelectedDeptos.add(d);
+  }
+  _applyBcFilters();
+}
+
+function _applyBcFilters() {
+  const lb=document.getElementById('bcLojaLabel');
+  if(lb) lb.textContent = _bcSelectedLojas.size===_bcAllLojas.length?'Todas':_bcSelectedLojas.size+' selecionada'+(_bcSelectedLojas.size>1?'s':'');
+  document.querySelectorAll('.bc-depto-btn').forEach(b => {
+    const on = _bcSelectedDeptos.has(b.dataset.depto);
+    b.style.background = on ? '#1e1e1e' : '#fff';
+    b.style.color = on ? '#fff' : 'var(--ink)';
+  });
+  renderBackCustoTable();
+}
+
+function renderBackCusto() {
+  const body = document.getElementById('back-custo-body'); if(!body) return;
+  if(!_bcRawRows.length) {
+    body.innerHTML = '<div style="padding:2rem;color:var(--muted)">Nenhum dado encontrado nesta aba.</div>';
+    return;
+  }
+
+  const lojaLabel = _bcSelectedLojas.size===_bcAllLojas.length?'Todas':_bcSelectedLojas.size+' selecionada'+(_bcSelectedLojas.size>1?'s':'');
+  const lojaOpts = _bcAllLojas.map(l =>
+    '<label style="display:flex;align-items:center;gap:10px;padding:7px 14px;cursor:pointer;border-bottom:1px solid #f5f4f0;font-size:11px" onmouseenter="this.style.background=\'#f5f4f0\'" onmouseleave="this.style.background=\'\'">'+
+    '<input type="checkbox" class="bc-loja-cb" data-loja="'+l+'" checked onchange="toggleBcLoja(\''+l.replace(/'/g,"\\'")+'\')">'+
+    '<span style="flex:1">'+l+'</span></label>').join('');
+
+  const deptoBtns = _bcAllDeptos.map(d =>
+    '<button class="bc-depto-btn" data-depto="'+d+'" onclick="toggleBcDepto(\''+d.replace(/'/g,"\\'")+'\')" '+
+    'style="background:#1e1e1e;color:#fff;border:1px solid var(--border);border-radius:3px;padding:7px 14px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;cursor:pointer">'+
+    d+'</button>').join('');
+
+  body.innerHTML =
+    '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">'+
+      '<div id="bcLojaWrap" style="position:relative;display:inline-block">'+
+        '<button onclick="toggleBcLojaDD()" style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--border);border-radius:3px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;min-width:200px;justify-content:space-between">'+
+          '<span>Empresa</span><span id="bcLojaLabel" style="color:var(--muted);font-weight:400">'+lojaLabel+'</span><span style="font-size:10px;color:var(--muted)">▼</span>'+
+        '</button>'+
+        '<div id="bcLojaDD" style="display:none;position:absolute;top:100%;left:0;z-index:999;background:#fff;border:1px solid var(--border);border-radius:3px;box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:280px;max-height:280px;overflow-y:auto;margin-top:2px">'+
+          '<label style="display:flex;align-items:center;gap:10px;padding:8px 14px;cursor:pointer;border-bottom:1px solid #e0dfd8;font-size:12px;font-weight:600" onmouseenter="this.style.background=\'#f5f4f0\'" onmouseleave="this.style.background=\'\'">'+
+            '<input type="checkbox" id="bcLojaAll" checked onchange="toggleTodasBcLojas(this.checked)"><span>Todas as empresas</span></label>'+
+          lojaOpts+
+        '</div>'+
+      '</div>'+
+      '<div style="display:flex;align-items:center;gap:6px">'+
+        '<span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Departamento:</span>'+
+        deptoBtns+
+      '</div>'+
+    '</div>'+
+    '<div id="bc-kpis" style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap"></div>'+
+    '<div id="bc-table" class="tbl-wrap"></div>';
+
+  setTimeout(() => {
+    document.addEventListener('click', function _bcdd(e) {
+      const w=document.getElementById('bcLojaWrap');
+      if(w&&!w.contains(e.target)){const dd=document.getElementById('bcLojaDD');if(dd)dd.style.display='none';}
+    });
+  }, 100);
+
+  renderBackCustoTable();
+}
+
+function renderBackCustoTable() {
+  const tblBox = document.getElementById('bc-table');
+  const kpiBox = document.getElementById('bc-kpis');
+  if(!tblBox) return;
+
+  const rows = _bcFiltered();
+  if(!rows.length) {
+    if(kpiBox) kpiBox.innerHTML='';
+    tblBox.innerHTML='<div style="padding:1rem;color:var(--muted)">Sem dados para os filtros selecionados.</div>';
+    return;
+  }
+
+  // Agrega por Tipo de Título
+  const map = {};
+  rows.forEach(r => {
+    const t = r.tipo || '(sem tipo)';
+    if(!map[t]) map[t] = {qtd:0, valor:0, saldo:0, pago:0};
+    map[t].qtd++; map[t].valor+=r.valor; map[t].saldo+=r.saldo; map[t].pago+=r.pago;
+  });
+  const tipos = Object.entries(map).sort((a,b)=>b[1].valor-a[1].valor);
+
+  const totQtd   = rows.length;
+  const totValor = tipos.reduce((s,[,v])=>s+v.valor,0);
+  const totSaldo = tipos.reduce((s,[,v])=>s+v.saldo,0);
+  const totPago  = tipos.reduce((s,[,v])=>s+v.pago,0);
+
+  const fR = v => 'R$ '+v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const fN = v => v.toLocaleString('pt-BR');
+
+  // KPIs (mesmo estilo da Oficina)
+  const kpi = (l,v,c) => '<div style="background:#fff;border:1px solid var(--border);border-left:3px solid '+c+';border-radius:3px;padding:.65rem 1.2rem;min-width:160px">'
+    +'<p style="font-size:10px;color:var(--muted);margin:0 0 2px;text-transform:uppercase;letter-spacing:.5px;font-weight:600">'+l+'</p>'
+    +'<p style="font-size:20px;font-weight:700;margin:0">'+v+'</p></div>';
+  if(kpiBox) kpiBox.innerHTML =
+    kpi('Total Títulos', fN(totQtd),   '#1a3c8a') +
+    kpi('Valor Total',   fR(totValor), '#1a7a4c') +
+    kpi('Saldo Total',   fR(totSaldo), '#7a5a00') +
+    kpi('Valor Pago',    fR(totPago),  '#6a1a7a');
+
+  // Tabela (mesmo estilo da Oficina)
+  const BH = 'background:#1a2a48;color:#fff;padding:9px 12px;font-size:11px;font-weight:700;text-align:';
+  const TD = 'padding:8px 12px;text-align:';
+
+  let h = '<table style="width:100%;border-collapse:collapse;font-size:12px;min-width:760px"><thead>'
+    +'<tr>'
+    +'<th style="'+BH+'left">Tipo de Título</th>'
+    +'<th style="'+BH+'right;border-left:2px solid #2a5a8a">Qtd. Títulos</th>'
+    +'<th style="'+BH+'right;border-left:2px solid #2a5a8a">Valor Título</th>'
+    +'<th style="'+BH+'right">Saldo</th>'
+    +'<th style="'+BH+'right">Valor Pago</th>'
+    +'</tr></thead><tbody>';
+
+  tipos.forEach(([tipo,v],i)=>{
+    h += '<tr style="background:'+(i%2===0?'#fff':'#fafaf8')+';border-bottom:1px solid var(--border)">'
+      +'<td style="'+TD+'left;font-weight:600">'+tipo+'</td>'
+      +'<td style="'+TD+'right;font-weight:700">'+fN(v.qtd)+'</td>'
+      +'<td style="'+TD+'right">'+fR(v.valor)+'</td>'
+      +'<td style="'+TD+'right;color:'+(v.saldo>0?'#c62828':'inherit')+'">'+fR(v.saldo)+'</td>'
+      +'<td style="'+TD+'right">'+fR(v.pago)+'</td>'
+      +'</tr>';
+  });
+
+  h += '<tr style="background:#111;color:#fff;font-weight:700">'
+    +'<td style="'+TD+'left">Total</td>'
+    +'<td style="'+TD+'right">'+fN(totQtd)+'</td>'
+    +'<td style="'+TD+'right">'+fR(totValor)+'</td>'
+    +'<td style="'+TD+'right">'+fR(totSaldo)+'</td>'
+    +'<td style="'+TD+'right">'+fR(totPago)+'</td>'
+    +'</tr></tbody></table>';
+
+  tblBox.innerHTML = h;
 }
 // ─────────────────────────────────────────────────────────────────────────────
 </script>
