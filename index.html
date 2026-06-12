@@ -486,27 +486,18 @@ th:hover .col-rh,.col-rh:hover,.col-rh.rh-drag{opacity:1;background:rgba(255,255
 </div>
 
 <div id="pageOficina" style="display:none">
-  <div style="background:#fff;border-bottom:1px solid var(--border);padding:6px 20px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-    <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Aba:</span>
-    <select class="sheet-select" id="oficina-sheet-sel" onchange="loadOficinaSheet(this.value)" style="min-width:160px"></select>
+  <div style="background:#fff;border-bottom:1px solid var(--border);padding:6px 20px;display:flex;align-items:center;gap:8px">
+    <span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Aba:</span>
+    <select class="sheet-select" id="oficina-sheet-sel" onchange="loadOficinaSheet(this.value)" style="min-width:200px"></select>
     <div style="display:flex;align-items:center;gap:6px;margin-left:8px">
       <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Dias úteis:</label>
       <input type="number" id="oficina-dias-uteis" value="22" min="1" max="31"
-        onchange="oficinaSetDias()"
+        onchange="oficinaSetDias()" title="Dias úteis do mês (digite; fica salvo por mês). Usado no PMD."
         style="width:52px;border:1px solid var(--border2);border-radius:3px;padding:5px 6px;font-size:12px;font-weight:700;text-align:center">
     </div>
-    <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
-      <label style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Empresa:</label>
-      <select id="oficina-empresa-sel" onchange="renderOficina()" style="background:#fff;border:1px solid var(--border2);padding:5px 10px;border-radius:3px;font-size:11px;min-width:240px">
-        <option value="">Todas as empresas</option>
-      </select>
-    </div>
   </div>
-  <div style="padding:16px 20px 60px">
-    <div id="oficina-kpis" style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap"></div>
-    <div id="oficina-table" style="overflow-x:auto;border:1px solid var(--border);border-radius:3px">
-      <div style="padding:3rem;text-align:center;color:var(--muted)">🔧 Carregando...</div>
-    </div>
+  <div style="padding:16px 20px 60px" id="oficina-body">
+    <div style="padding:2rem;color:var(--muted)">Configure a URL da API <b>Oficina - Produtivo</b> nas configurações (⚙) para carregar esta aba.</div>
   </div>
 </div>
 
@@ -4860,163 +4851,318 @@ function renderVendaTop10() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ── OFICINA ───────────────────────────────────────────────────────────────────
-let _oficinaRawData = [];
-let _oficinaSheet = '';
-// Salva o valor de dias úteis digitado para o mês atual e re-renderiza
+let _ofRows = [];
+let _ofSheet = '';
+let _ofAll = {loja:[], tipo:[], cons:[], prod:[]};
+let _ofSel = {loja:new Set(), tipo:new Set(), cons:new Set(), prod:new Set()};
+
+// Salva os dias úteis digitados para o mês atual e re-renderiza
 function oficinaSetDias(){
   const di=document.getElementById('oficina-dias-uteis');
-  if(di && _oficinaSheet) _lsSet('v1_ofdias_'+_oficinaSheet, di.value);
-  renderOficina();
+  if(di && _ofSheet) _lsSet('v1_ofdias_'+_ofSheet, di.value);
+  renderOficinaContent();
+}
+function _ofDiasUteis(){
+  const di=document.getElementById('oficina-dias-uteis');
+  return Math.max(1, parseInt(di?di.value:'22')||22);
 }
 
+function _ofNum(v){
+  if(typeof v === 'number') return isNaN(v)?0:v;
+  let s = String(v==null?'':v).trim();
+  if(!s) return 0;
+  s = s.replace(/R\$\s?/,'').replace(/\./g,'').replace(',','.');
+  const n = parseFloat(s);
+  return isNaN(n)?0:n;
+}
+const _ofFmtR = v => 'R$ '+v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+const _ofFmtN = v => v.toLocaleString('pt-BR');
+
 function initOficinaPage() {
+  const body = document.getElementById('oficina-body');
   if(!API_OFICINA) {
-    document.getElementById('oficina-table').innerHTML =
-      '<div style="padding:2rem;color:var(--muted)">Configure a URL da API de Oficina nas configurações (⚙).</div>';
+    body.innerHTML = '<div style="padding:2rem;color:var(--muted)">Configure a URL da API <b>Oficina - Produtivo</b> nas configurações (⚙).</div>';
     return;
   }
   const sel = document.getElementById('oficina-sheet-sel');
   if(!sel) return;
   if(sel.options.length > 1) { if(sel.value) loadOficinaSheet(sel.value); return; }
-  sel.innerHTML = '<option>Carregando...</option>';
+  sel.innerHTML = '<option>Carregando abas...</option>';
   jsonp(API_OFICINA, {sheet:'__sheets__'}).then(data => {
     const sheets = data.sheets || [];
     sel.innerHTML = sheets.map(s => '<option value="'+s+'">'+s+'</option>').join('');
-    if(sel.options.length) {
-      sel.value = sel.options[sel.options.length-1].value;
-      loadOficinaSheet(sel.value);
-    }
+    if(sel.options.length) { sel.value = sel.options[0].value; loadOficinaSheet(sel.value); }
   }).catch(() => { sel.innerHTML = '<option>Erro ao carregar abas</option>'; });
 }
 
 function loadOficinaSheet(name) {
-  if(!name) return;
-  const tbl = document.getElementById('oficina-table');
-  tbl.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--muted)"><div class="spin2" style="margin:0 auto 8px"></div>Carregando...</div>';
-  document.getElementById('oficina-kpis').innerHTML = '';
+  const body = document.getElementById('oficina-body');
+  body.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--muted)"><div class="spin2" style="margin:0 auto 8px"></div>Carregando...</div>';
   jsonp(API_OFICINA, {sheet:name}).then(data => {
     if(data.error) throw new Error(data.error);
-    _oficinaRawData = data.rows || [];
-    _oficinaSheet = name;
-    // Dias úteis: usa o valor salvo para este mês; senão 22 (digitado pelo usuário)
+    _ofSheet = name;
     const _di = document.getElementById('oficina-dias-uteis');
     if(_di){ const _sv=_ls('v1_ofdias_'+name, ''); _di.value = (_sv!=='') ? _sv : '22'; }
-    // Populate empresa filter
-    const empresas = [...new Set(_oficinaRawData.map(r => String(r['Empresa_Nome']||'').trim()).filter(Boolean))].sort();
-    const sel = document.getElementById('oficina-empresa-sel');
-    sel.innerHTML = '<option value="">Todas as empresas</option>' +
-      empresas.map(e => '<option value="'+e+'">'+e+'</option>').join('');
-    renderOficina();
-  }).catch(err => {
-    tbl.innerHTML = '<div style="padding:2rem;color:var(--red)">Erro: '+err.message+'</div>';
+    _ofRows = (data.rows||[]).map(r => ({
+      tipo: String(r['TipoOS']||'').trim()    || '(sem tipo)',
+      cons: String(r['Consultor']||'').trim() || '(sem consultor)',
+      prod: String(r['Produtivo']||'').trim() || '(sem produtivo)',
+      loja: String(r['Loja']||'').trim(),
+      custo: _ofNum(r['Custo'])
+    })).filter(r => r.loja);
+
+    _ofAll.loja = [...new Set(_ofRows.map(r=>r.loja))].sort();
+    _ofAll.tipo = [...new Set(_ofRows.map(r=>r.tipo))].sort();
+    _ofAll.cons = [...new Set(_ofRows.map(r=>r.cons))].sort();
+    _ofAll.prod = [...new Set(_ofRows.map(r=>r.prod))].sort();
+    ['loja','tipo','cons','prod'].forEach(k => _ofSel[k] = new Set(_ofAll[k]));
+
+    renderOficinaShell();
+  }).catch(e => {
+    body.innerHTML = '<div style="padding:2rem;color:var(--red)">Erro: '+e.message+'</div>';
   });
 }
 
-function renderOficina() {
-  if(!_oficinaRawData.length) return;
-  const empresa = document.getElementById('oficina-empresa-sel')?.value || '';
-  const rows = empresa
-    ? _oficinaRawData.filter(r => String(r['Empresa_Nome']||'').trim() === empresa)
-    : _oficinaRawData;
+function _ofFiltered() {
+  return _ofRows.filter(r =>
+    _ofSel.loja.has(r.loja) && _ofSel.tipo.has(r.tipo) &&
+    _ofSel.cons.has(r.cons) && _ofSel.prod.has(r.prod)
+  );
+}
 
-  const map = {};
-  rows.forEach(r => {
-    const nome = String(r['Usuario_Nome']||'').split(' - Mat.')[0].trim();
-    if(!nome) return;
-    if(!map[nome]) map[nome] = { mo:0, pecas:0, passagem:0, osQtd:0, hv:0 };
-    map[nome].mo       += toNum(r['Valor_Liquido']);
-    map[nome].pecas    += toNum(r['Valor_Produtos']);
-    map[nome].passagem += toNum(r['Qtde_Veiculo']);
-    map[nome].osQtd    += toNum(r['Qtde_OS']);
-    map[nome].hv       += toNum(r['Horas_Vendidas']);
+function _ofDDLabel(k){
+  return _ofSel[k].size===_ofAll[k].length ? (k==='loja'?'Todas':'Todos') : _ofSel[k].size+' selec.';
+}
+function toggleOfDD(k){
+  ['loja','tipo','cons','prod'].forEach(o => {
+    const dd=document.getElementById('ofDD_'+o);
+    if(dd) dd.style.display = (o===k && dd.style.display==='none') ? 'block' : 'none';
   });
+}
+function toggleOfItem(k, val){
+  if(_ofSel[k].has(val)) _ofSel[k].delete(val); else _ofSel[k].add(val);
+  document.querySelectorAll('.of-cb-'+k).forEach(cb=>{ if(cb.dataset.v===val) cb.checked=_ofSel[k].has(val); });
+  _applyOfFilters();
+}
+function toggleOfAll(k, checked){
+  document.querySelectorAll('.of-cb-'+k).forEach(cb=>{
+    cb.checked=checked;
+    if(checked) _ofSel[k].add(cb.dataset.v); else _ofSel[k].delete(cb.dataset.v);
+  });
+  _applyOfFilters();
+}
+function _applyOfFilters(){
+  ['loja','tipo','cons','prod'].forEach(k=>{
+    const lb=document.getElementById('ofLbl_'+k); if(lb) lb.textContent=_ofDDLabel(k);
+  });
+  renderOficinaContent();
+}
 
-  const diasUteis = Math.max(1, parseInt(document.getElementById('oficina-dias-uteis')?.value||'22'));
+function _ofDropdown(k, titulo){
+  const opts = _ofAll[k].map(v =>
+    '<label style="display:flex;align-items:center;gap:10px;padding:7px 14px;cursor:pointer;border-bottom:1px solid #f5f4f0;font-size:11px" onmouseenter="this.style.background=\'#f5f4f0\'" onmouseleave="this.style.background=\'\'">'+
+    '<input type="checkbox" class="of-cb-'+k+'" data-v="'+v.replace(/"/g,'&quot;')+'" checked onchange="toggleOfItem(\''+k+'\',\''+v.replace(/'/g,"\\'")+'\')">'+
+    '<span style="flex:1">'+v+'</span></label>').join('');
+  return '<div style="position:relative;display:inline-block" class="of-dd-wrap">'+
+    '<button onclick="toggleOfDD(\''+k+'\')" style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--border);border-radius:3px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;min-width:170px;justify-content:space-between">'+
+      '<span>'+titulo+'</span><span id="ofLbl_'+k+'" style="color:var(--muted);font-weight:400">'+_ofDDLabel(k)+'</span><span style="font-size:10px;color:var(--muted)">▼</span>'+
+    '</button>'+
+    '<div id="ofDD_'+k+'" style="display:none;position:absolute;top:100%;left:0;z-index:999;background:#fff;border:1px solid var(--border);border-radius:3px;box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:290px;max-height:300px;overflow-y:auto;margin-top:2px">'+
+      '<label style="display:flex;align-items:center;gap:10px;padding:8px 14px;cursor:pointer;border-bottom:1px solid #e0dfd8;font-size:12px;font-weight:600" onmouseenter="this.style.background=\'#f5f4f0\'" onmouseleave="this.style.background=\'\'">'+
+        '<input type="checkbox" checked onchange="toggleOfAll(\''+k+'\',this.checked)"><span>'+(k==='loja'?'Todas':'Todos')+'</span></label>'+
+      opts+
+    '</div>'+
+  '</div>';
+}
 
-  const cons  = Object.entries(map).sort((a,b) => b[1].mo - a[1].mo);
-  const totMO    = cons.reduce((s,[,v])=>s+v.mo,0);
-  const totPecas = cons.reduce((s,[,v])=>s+v.pecas,0);
-  const totPass  = cons.reduce((s,[,v])=>s+v.passagem,0);
-  const totOS    = cons.reduce((s,[,v])=>s+v.osQtd,0);
-  const totHV    = cons.reduce((s,[,v])=>s+v.hv,0);
+function renderOficinaShell() {
+  const body = document.getElementById('oficina-body'); if(!body) return;
+  if(!_ofRows.length){
+    body.innerHTML = '<div style="padding:2rem;color:var(--muted)">Nenhuma O.S encontrada nesta aba (lembre que apenas as 15 lojas configuradas entram).</div>';
+    return;
+  }
+  body.innerHTML =
+    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">'+
+      _ofDropdown('loja','Loja')+
+      _ofDropdown('tipo','Tipo O.S')+
+      _ofDropdown('cons','Consultor')+
+      _ofDropdown('prod','Produtivo')+
+    '</div>'+
+    '<div id="of-kpis" style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap"></div>'+
+    '<div id="of-matrix" style="margin-bottom:24px"></div>'+
+    '<div id="of-ranks" style="display:flex;gap:16px;flex-wrap:wrap"></div>';
 
-  const fN  = v => v ? Math.round(v).toLocaleString('pt-BR') : '—';
-  const fD  = (v,d) => v ? v.toFixed(d).replace('.',',') : '—';
-  const fR  = v => v ? 'R$ '+Math.round(v).toLocaleString('pt-BR') : '—';
+  setTimeout(()=>{
+    document.addEventListener('click', function _ofdd(e){
+      if(e.target.closest('.of-dd-wrap')) return;
+      ['loja','tipo','cons','prod'].forEach(k=>{const dd=document.getElementById('ofDD_'+k);if(dd)dd.style.display='none';});
+    });
+  },100);
 
-  // KPIs
-  const kpis = document.getElementById('oficina-kpis');
+  renderOficinaContent();
+}
+
+function renderOficinaContent() {
+  const rows = _ofFiltered();
+  const kpiBox = document.getElementById('of-kpis');
+  const mtxBox = document.getElementById('of-matrix');
+  const rnkBox = document.getElementById('of-ranks');
+  if(!mtxBox) return;
+
+  if(!rows.length){
+    if(kpiBox) kpiBox.innerHTML='';
+    mtxBox.innerHTML='<div style="padding:1rem;color:var(--muted)">Sem O.S para os filtros selecionados.</div>';
+    if(rnkBox) rnkBox.innerHTML='';
+    return;
+  }
+
+  // ── Camada 1: KPIs ──
+  const totOS = rows.length;
+  const totCusto = rows.reduce((s,r)=>s+r.custo,0);
+  const consAtivos = new Set(rows.map(r=>r.cons)).size;
+  const prodAtivos = new Set(rows.map(r=>r.prod)).size;
   const kpi = (l,v,c) => '<div style="background:#fff;border:1px solid var(--border);border-left:3px solid '+c+';border-radius:3px;padding:.65rem 1.2rem;min-width:150px">'
     +'<p style="font-size:10px;color:var(--muted);margin:0 0 2px;text-transform:uppercase;letter-spacing:.5px;font-weight:600">'+l+'</p>'
     +'<p style="font-size:20px;font-weight:700;margin:0">'+v+'</p></div>';
-  if(kpis) kpis.innerHTML =
-    kpi('Total MO',    fR(totMO),    '#1a3c8a') +
-    kpi('Total Peças', fR(totPecas), '#1a7a4c') +
-    kpi('Passagens',   fN(totPass),  '#7a5a00') +
-    kpi('Total OS',    fN(totOS),    '#6a1a7a');
+  if(kpiBox) kpiBox.innerHTML =
+    kpi('Total O.S',     _ofFmtN(totOS),            '#1a3c8a')+
+    kpi('Custo Total',   _ofFmtR(totCusto),         '#1a7a4c')+
+    kpi('Custo Médio/OS',_ofFmtR(totOS?totCusto/totOS:0),'#7a5a00')+
+    kpi('Consultores',   _ofFmtN(consAtivos),       '#6a1a7a')+
+    kpi('Produtivos',    _ofFmtN(prodAtivos),       '#1a6a7a');
 
-  const BH  = 'background:#1a2a48;color:#fff;padding:9px 12px;font-size:11px;font-weight:700;text-align:';
-  const SH  = 'background:#233554;color:#ccd;padding:7px 10px;font-size:10px;font-weight:600;text-align:';
-  const TD  = 'padding:8px 10px;text-align:';
-  const STD = 'padding:9px 10px;text-align:';
+  // ── Camada 2: Matriz Loja × Tipo O.S ──
+  const tiposVisiveis = [...new Set(rows.map(r=>r.tipo))];
+  const tipoTot = {};
+  tiposVisiveis.forEach(t=>{ tipoTot[t]=rows.filter(r=>r.tipo===t).length; });
+  tiposVisiveis.sort((a,b)=>tipoTot[b]-tipoTot[a]);
 
-  let h = '<table style="width:100%;border-collapse:collapse;font-size:12px;min-width:900px"><thead>'
-    +'<tr>'
-    +'<th style="'+BH+'left" rowspan="2">Consultor Técnico</th>'
-    +'<th style="'+BH+'center;border-left:2px solid #2a5a8a" colspan="3">Mão de Obra</th>'
-    +'<th style="'+BH+'center;border-left:2px solid #2a5a8a" colspan="3">Peças</th>'
-    +'<th style="'+BH+'center;border-left:2px solid #2a5a8a" colspan="3">Informações Adicionais</th>'
-    +'</tr>'
-    +'<tr>'
-    +'<th style="'+SH+'right">Venda</th>'
-    +'<th style="'+SH+'right">TM MO</th>'
-    +'<th style="'+SH+'right">HV</th>'
-    +'<th style="'+SH+'right;border-left:2px solid #1a2a48">Venda</th>'
-    +'<th style="'+SH+'right">TM PC</th>'
-    +'<th style="'+SH+'right">Peças×MO</th>'
-    +'<th style="'+SH+'center;border-left:2px solid #1a2a48">Passagem</th>'
-    +'<th style="'+SH+'right">PMD</th>'
-    +'<th style="'+SH+'right">Total OS</th>'
+  const porLoja = {};
+  const _isS1 = t => String(t||'').trim().toUpperCase().startsWith('S1');
+  rows.forEach(r=>{
+    if(!porLoja[r.loja]) porLoja[r.loja]={tot:0,custo:0,tipos:{},cons:{},prods:{}};
+    const L=porLoja[r.loja];
+    L.tot++; L.custo+=r.custo;
+    if(!L.tipos[r.tipo]) L.tipos[r.tipo]={qtd:0,custo:0};
+    L.tipos[r.tipo].qtd++; L.tipos[r.tipo].custo+=r.custo;
+    if(!L.cons[r.cons]) L.cons[r.cons]={qtd:0,custo:0};
+    L.cons[r.cons].qtd++; L.cons[r.cons].custo+=r.custo;
+    if(!L.prods[r.prod]) L.prods[r.prod]={qtd:0,custo:0,s1:0};
+    L.prods[r.prod].qtd++; L.prods[r.prod].custo+=r.custo;
+    if(_isS1(r.tipo)) L.prods[r.prod].s1++;
+  });
+  const lojas = Object.entries(porLoja).sort((a,b)=>b[1].tot-a[1].tot);
+
+  const BH='background:#1a2a48;color:#fff;padding:8px 10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap';
+  const TD='padding:7px 10px;white-space:nowrap';
+
+  let m='<div class="tbl-wrap" style="border:1px solid var(--border);border-radius:3px;overflow-x:auto">'
+    +'<table style="border-collapse:collapse;font-size:12px;width:100%"><thead><tr>'
+    +'<th style="'+BH+';text-align:left;position:sticky;left:0;background:#1a2a48;z-index:1">Loja</th>'
+    +tiposVisiveis.map(t=>'<th style="'+BH+';text-align:right">'+t+'</th>').join('')
+    +'<th style="'+BH+';text-align:right;border-left:2px solid #2a5a8a">Total O.S</th>'
+    +'<th style="'+BH+';text-align:right">Custo Total</th>'
+    +'<th style="'+BH+';text-align:right">Custo Médio</th>'
     +'</tr></thead><tbody>';
 
-  cons.forEach(([nome, d], i) => {
-    const tmmo = d.passagem ? d.mo/d.passagem : 0;
-    const tmpc = d.passagem ? d.pecas/d.passagem : 0;
-    const pxmo = d.mo ? d.pecas/d.mo : 0;
-    const pmd  = diasUteis ? d.passagem/diasUteis : 0;
-    const bg   = i%2===0 ? '#fff' : '#f7f8fa';
-    h += '<tr style="background:'+bg+';border-bottom:1px solid var(--border)">'
-      +'<td style="'+TD+'left;font-weight:600">'+nome+'</td>'
-      +'<td style="'+TD+'right">'+fN(d.mo)+'</td>'
-      +'<td style="'+TD+'right;color:var(--muted)">'+fN(tmmo)+'</td>'
-      +'<td style="'+TD+'right;color:var(--muted)">'+fD(d.hv,1)+'</td>'
-      +'<td style="'+TD+'right;border-left:2px solid #e8e7e0">'+fN(d.pecas)+'</td>'
-      +'<td style="'+TD+'right;color:var(--muted)">'+fN(tmpc)+'</td>'
-      +'<td style="'+TD+'right">'+fD(pxmo,1)+'</td>'
-      +'<td style="'+TD+'center;border-left:2px solid #e8e7e0;font-weight:700">'+d.passagem+'</td>'
-      +'<td style="'+TD+'right">'+fD(pmd,2)+'</td>'
-      +'<td style="'+TD+'right;color:var(--muted)">'+d.osQtd+'</td>'
+  lojas.forEach(([loja,L],i)=>{
+    const rid='of_lj_'+i;
+    m+='<tr style="background:'+(i%2===0?'#fff':'#fafaf8')+';border-bottom:1px solid var(--border);cursor:pointer" onclick="toggleOfLoja(\''+rid+'\')">'
+      +'<td style="'+TD+';font-weight:600;position:sticky;left:0;background:inherit"><span id="of_eb_'+rid+'" style="font-size:11px;color:#888;margin-right:6px">⊞</span>'+loja+'</td>'
+      +tiposVisiveis.map(t=>'<td style="'+TD+';text-align:right">'+(L.tipos[t]?_ofFmtN(L.tipos[t].qtd):'<span style="color:#ccc">—</span>')+'</td>').join('')
+      +'<td style="'+TD+';text-align:right;font-weight:700;border-left:2px solid var(--border)">'+_ofFmtN(L.tot)+'</td>'
+      +'<td style="'+TD+';text-align:right">'+_ofFmtR(L.custo)+'</td>'
+      +'<td style="'+TD+';text-align:right">'+_ofFmtR(L.tot?L.custo/L.tot:0)+'</td>'
       +'</tr>';
+
+    // ── Camada 3: drill-down (consultores + produtivos da loja) ──
+    const consArr=Object.entries(L.cons).sort((a,b)=>b[1].qtd-a[1].qtd);
+    const prodArr=Object.entries(L.prods).sort((a,b)=>b[1].qtd-a[1].qtd);
+    const mini=(titulo,arr)=>'<div style="flex:1;min-width:280px;max-width:560px">'
+      +'<div style="background:#2a2a2a;color:#fff;padding:6px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px">'+titulo+'</div>'
+      +'<table style="width:100%;border-collapse:collapse;font-size:11px">'
+      +arr.map(([n,v],j)=>'<tr style="background:'+(j%2===0?'#fff':'#f7f6f2')+';border-bottom:1px solid var(--border)">'
+        +'<td style="padding:5px 12px">'+n+'</td>'
+        +'<td style="padding:5px 12px;text-align:right;font-weight:700;width:60px">'+_ofFmtN(v.qtd)+'</td>'
+        +'<td style="padding:5px 12px;text-align:right;width:120px">'+_ofFmtR(v.custo)+'</td>'
+        +'</tr>').join('')
+      +'</table></div>';
+    // Produtivos com PMD (Passagem Média Dia = O.S do tipo S1 ÷ dias úteis)
+    const _du=_ofDiasUteis();
+    const miniProd='<div style="flex:1;min-width:320px;max-width:560px">'
+      +'<div style="background:#2a2a2a;color:#fff;padding:6px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px">Produtivos — '+loja+'</div>'
+      +'<table style="width:100%;border-collapse:collapse;font-size:11px">'
+      +'<tr style="background:#e0dfd8;font-weight:700"><td style="padding:4px 12px">Produtivo</td><td style="padding:4px 12px;text-align:right;width:50px">Qtd</td><td style="padding:4px 12px;text-align:right;width:55px" title="Quantidade de O.S do tipo S1">Qtd S1</td><td style="padding:4px 12px;text-align:right;width:60px" title="Passagem Média Dia: O.S S1 ÷ dias úteis">PMD</td><td style="padding:4px 12px;text-align:right;width:110px">Custo</td></tr>'
+      +prodArr.map(([n,v],j)=>'<tr style="background:'+(j%2===0?'#fff':'#f7f6f2')+';border-bottom:1px solid var(--border)">'
+        +'<td style="padding:5px 12px">'+n+'</td>'
+        +'<td style="padding:5px 12px;text-align:right;font-weight:700">'+_ofFmtN(v.qtd)+'</td>'
+        +'<td style="padding:5px 12px;text-align:right;font-weight:700;color:#1a7a4c">'+_ofFmtN(v.s1||0)+'</td>'
+        +'<td style="padding:5px 12px;text-align:right;font-weight:700;color:#1a3c8a">'+((v.s1||0)/_du).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})+'</td>'
+        +'<td style="padding:5px 12px;text-align:right">'+_ofFmtR(v.custo)+'</td>'
+        +'</tr>').join('')
+      +'</table></div>';
+    // Custo por Tipo de O.S (qtd · custo total · custo médio/OS)
+    const tiposArr=Object.entries(L.tipos).sort((a,b)=>b[1].custo-a[1].custo);
+    const miniTipos='<div style="flex:1;min-width:320px;max-width:560px">'
+      +'<div style="background:#2a2a2a;color:#fff;padding:6px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px">Custo por Tipo de O.S — '+loja+'</div>'
+      +'<table style="width:100%;border-collapse:collapse;font-size:11px">'
+      +'<tr style="background:#e0dfd8;font-weight:700"><td style="padding:4px 12px">Tipo</td><td style="padding:4px 12px;text-align:right;width:50px">Qtd</td><td style="padding:4px 12px;text-align:right;width:110px">Custo</td><td style="padding:4px 12px;text-align:right;width:110px">Custo/OS</td></tr>'
+      +tiposArr.map(([t,v],j)=>'<tr style="background:'+(j%2===0?'#fff':'#f7f6f2')+';border-bottom:1px solid var(--border)">'
+        +'<td style="padding:5px 12px">'+t+'</td>'
+        +'<td style="padding:5px 12px;text-align:right;font-weight:700">'+_ofFmtN(v.qtd)+'</td>'
+        +'<td style="padding:5px 12px;text-align:right">'+_ofFmtR(v.custo)+'</td>'
+        +'<td style="padding:5px 12px;text-align:right">'+_ofFmtR(v.qtd?v.custo/v.qtd:0)+'</td>'
+        +'</tr>').join('')
+      +'</table></div>';
+    m+='<tr id="of_det_'+rid+'" style="display:none"><td colspan="'+(tiposVisiveis.length+4)+'" style="padding:0;background:#f5f4f0">'
+      +'<div style="position:sticky;left:0;max-width:calc(100vw - 80px);box-sizing:border-box;padding:12px">'
+      +'<div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start">'+mini('Consultores — '+loja,consArr)+miniProd+miniTipos+'</div>'
+      +'</div>'
+      +'</td></tr>';
   });
 
-  const stmmo = totPass ? totMO/totPass : 0;
-  const stmpc = totPass ? totPecas/totPass : 0;
-  const spxmo = totMO ? totPecas/totMO : 0;
-  const spmd  = diasUteis ? totPass/diasUteis : 0;
-  h += '<tr style="border-top:2px solid #1a2a48">'
-    +'<td style="'+STD+'left;font-weight:700;background:#1a2a48;color:#fff">Subtotal</td>'
-    +'<td style="'+STD+'right;font-weight:700;background:#1a2a48;color:#fff">'+fN(totMO)+'</td>'
-    +'<td style="'+STD+'right;background:#1a2a48;color:#aaa">'+fN(stmmo)+'</td>'
-    +'<td style="'+STD+'right;background:#1a2a48;color:#aaa">'+fD(totHV,1)+'</td>'
-    +'<td style="'+STD+'right;font-weight:700;background:#1a2a48;color:#fff;border-left:2px solid #2a4a6a">'+fN(totPecas)+'</td>'
-    +'<td style="'+STD+'right;background:#1a2a48;color:#aaa">'+fN(stmpc)+'</td>'
-    +'<td style="'+STD+'right;background:#1a2a48;color:#fff;font-weight:700">'+fD(spxmo,1)+'</td>'
-    +'<td style="'+STD+'center;font-weight:700;background:#1a2a48;color:#fff;border-left:2px solid #2a4a6a">'+fN(totPass)+'</td>'
-    +'<td style="'+STD+'right;background:#1a2a48;color:#fff;font-weight:700">'+fD(spmd,2)+'</td>'
-    +'<td style="'+STD+'right;background:#1a2a48;color:#aaa">'+fN(totOS)+'</td>'
-    +'</tr></tbody></table>';
+  // Linha total geral
+  m+='<tr style="background:#111;color:#fff;font-weight:700">'
+    +'<td style="'+TD+';position:sticky;left:0;background:#111">Total</td>'
+    +tiposVisiveis.map(t=>'<td style="'+TD+';text-align:right">'+_ofFmtN(rows.filter(r=>r.tipo===t).length)+'</td>').join('')
+    +'<td style="'+TD+';text-align:right;border-left:2px solid #444">'+_ofFmtN(totOS)+'</td>'
+    +'<td style="'+TD+';text-align:right">'+_ofFmtR(totCusto)+'</td>'
+    +'<td style="'+TD+';text-align:right">'+_ofFmtR(totOS?totCusto/totOS:0)+'</td>'
+    +'</tr></tbody></table></div>';
+  mtxBox.innerHTML=m;
 
-  document.getElementById('oficina-table').innerHTML = h;
+  // ── Camada 4: Rankings ──
+  const aggBy = key => {
+    const mm={};
+    rows.forEach(r=>{ const k=r[key]; if(!mm[k])mm[k]={qtd:0,custo:0}; mm[k].qtd++; mm[k].custo+=r.custo; });
+    return Object.entries(mm).sort((a,b)=>b[1].qtd-a[1].qtd).slice(0,15);
+  };
+  const rank=(titulo,arr,cor)=>{
+    const max=arr.length?arr[0][1].qtd:1;
+    return '<div style="flex:1;min-width:340px;border:1px solid var(--border);border-radius:3px;overflow:hidden">'
+      +'<div style="background:#1e1e1e;color:#fff;padding:8px 14px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px">'+titulo+'</div>'
+      +'<table style="width:100%;border-collapse:collapse;font-size:12px">'
+      +arr.map(([n,v],i)=>'<tr style="background:'+(i%2===0?'#fff':'#fafaf8')+';border-bottom:1px solid var(--border)">'
+        +'<td style="padding:6px 12px;width:30px;text-align:center;font-weight:700;color:'+(i===0?'#c8921a':i===1?'#9ba0a8':i===2?'#b87f5a':'#bbb')+'">'+(i+1)+'</td>'
+        +'<td style="padding:6px 12px;font-weight:600">'+n
+          +'<div style="background:#e8e7e0;border-radius:2px;height:4px;width:120px;overflow:hidden;margin-top:3px">'
+          +'<div style="width:'+Math.round(v.qtd/max*120)+'px;background:'+cor+';height:100%"></div></div></td>'
+        +'<td style="padding:6px 12px;text-align:right;font-weight:700;width:60px">'+_ofFmtN(v.qtd)+'</td>'
+        +'<td style="padding:6px 12px;text-align:right;width:130px">'+_ofFmtR(v.custo)+'</td>'
+        +'</tr>').join('')
+      +'</table></div>';
+  };
+  if(rnkBox) rnkBox.innerHTML = rank('Top Consultores (O.S)',aggBy('cons'),'#1a3c8a')
+                              + rank('Top Produtivos (O.S)',aggBy('prod'),'#1a7a4c');
+}
+
+function toggleOfLoja(rid){
+  const det=document.getElementById('of_det_'+rid);
+  const icon=document.getElementById('of_eb_'+rid);
+  if(!det) return;
+  const open=det.style.display==='none'||det.style.display==='';
+  det.style.display=open?'table-row':'none';
+  if(icon) icon.textContent=open?'⊟':'⊞';
 }
 
 // ── BACK - CUSTO ──────────────────────────────────────────────────────────────
