@@ -194,13 +194,21 @@ th:hover .col-rh,.col-rh:hover,.col-rh.rh-drag{opacity:1;background:rgba(255,255
   }
 
   /* Tabelas: rolagem horizontal por toque (já têm overflow), com dica visual */
-  .tbl-wrap{ -webkit-overflow-scrolling:touch; }
+  .tbl-wrap{ -webkit-overflow-scrolling:touch; scroll-behavior:smooth; overscroll-behavior-x:contain; position:relative; }
+  /* sombra/gradiente na borda direita indicando que há mais conteúdo ao lado */
+  .tbl-wrap{ background-image:linear-gradient(to right, transparent calc(100% - 22px), rgba(0,0,0,.06)); background-attachment:local; }
   table{font-size:11px}
   thead th{padding:7px 8px;font-size:9px}
   td{padding:6px 8px !important}
+  /* barra de rolagem fina e visível no toque para reforçar que rola */
+  .tbl-wrap::-webkit-scrollbar{height:6px}
+  .tbl-wrap::-webkit-scrollbar-thumb{background:#b9b8af;border-radius:3px}
 
   /* Conteúdo geral com menos margem lateral para aproveitar a tela */
   .kpi-strip, .panel, [id$="-body"]{ }
+  /* Oficina: blocos do drill-down empilham (não cortam) no celular */
+  .of-drill-grid{flex-direction:column;gap:14px}
+  .of-drill-mini{min-width:0 !important;max-width:100% !important;width:100% !important;flex:1 1 100% !important}
 }
 @media (max-width:480px){
   .topbar-title p{display:none}
@@ -5157,7 +5165,7 @@ function renderOficinaContent() {
     // ── Camada 3: drill-down (consultores + produtivos da loja) ──
     const consArr=Object.entries(L.cons).sort((a,b)=>b[1].qtd-a[1].qtd);
     const prodArr=Object.entries(L.prods).sort((a,b)=>b[1].qtd-a[1].qtd);
-    const mini=(titulo,arr)=>'<div style="flex:1;min-width:280px;max-width:560px">'
+    const mini=(titulo,arr)=>'<div class="of-drill-mini" style="flex:1;min-width:280px;max-width:560px">'
       +'<div style="background:#2a2a2a;color:#fff;padding:6px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px">'+titulo+'</div>'
       +'<table style="width:100%;border-collapse:collapse;font-size:11px">'
       +arr.map(([n,v],j)=>'<tr style="background:'+(j%2===0?'#fff':'#f7f6f2')+';border-bottom:1px solid var(--border)">'
@@ -5168,7 +5176,7 @@ function renderOficinaContent() {
       +'</table></div>';
     // Produtivos com PMD (Passagem Média Dia = O.S do tipo S1 ÷ dias úteis)
     const _du=_ofDiasUteis();
-    const miniProd='<div style="flex:1;min-width:320px;max-width:560px">'
+    const miniProd='<div class="of-drill-mini" style="flex:1;min-width:320px;max-width:560px">'
       +'<div style="background:#2a2a2a;color:#fff;padding:6px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px">Produtivos — '+loja+'</div>'
       +'<table style="width:100%;border-collapse:collapse;font-size:11px">'
       +'<tr style="background:#e0dfd8;font-weight:700"><td style="padding:4px 12px">Produtivo</td><td style="padding:4px 12px;text-align:right;width:50px">Qtd</td><td style="padding:4px 12px;text-align:right;width:55px" title="Quantidade de O.S do tipo S1">Qtd S1</td><td style="padding:4px 12px;text-align:right;width:60px" title="Passagem Média Dia: O.S S1 ÷ dias úteis">PMD</td><td style="padding:4px 12px;text-align:right;width:110px">Custo</td></tr>'
@@ -5182,7 +5190,7 @@ function renderOficinaContent() {
       +'</table></div>';
     // Custo por Tipo de O.S (qtd · custo total · custo médio/OS)
     const tiposArr=Object.entries(L.tipos).sort((a,b)=>b[1].custo-a[1].custo);
-    const miniTipos='<div style="flex:1;min-width:320px;max-width:560px">'
+    const miniTipos='<div class="of-drill-mini" style="flex:1;min-width:320px;max-width:560px">'
       +'<div style="background:#2a2a2a;color:#fff;padding:6px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px">Custo por Tipo de O.S — '+loja+'</div>'
       +'<table style="width:100%;border-collapse:collapse;font-size:11px">'
       +'<tr style="background:#e0dfd8;font-weight:700"><td style="padding:4px 12px">Tipo</td><td style="padding:4px 12px;text-align:right;width:50px">Qtd</td><td style="padding:4px 12px;text-align:right;width:110px">Custo</td><td style="padding:4px 12px;text-align:right;width:110px">Custo/OS</td></tr>'
@@ -5195,7 +5203,7 @@ function renderOficinaContent() {
       +'</table></div>';
     m+='<tr id="of_det_'+rid+'" style="display:none"><td colspan="'+(tiposVisiveis.length+4)+'" style="padding:0;background:#f5f4f0">'
       +'<div style="position:sticky;left:0;max-width:calc(100vw - 80px);box-sizing:border-box;padding:12px">'
-      +'<div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start">'+mini('Consultores — '+loja,consArr)+miniProd+miniTipos+'</div>'
+      +'<div class="of-drill-grid" style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start">'+mini('Consultores — '+loja,consArr)+miniProd+miniTipos+'</div>'
       +'</div>'
       +'</td></tr>';
   });
