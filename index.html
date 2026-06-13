@@ -157,6 +157,8 @@ td:last-child{border-right:none}
 /* EXPORT */
 .export-btn{background:#fff;border:1px solid var(--border2);color:var(--muted);padding:4px 12px;border-radius:3px;font-size:11px;cursor:pointer;display:flex;align-items:center;gap:5px;font-family:inherit;transition:border-color .15s,color .15s}
 .export-btn:hover{border-color:var(--black);color:var(--black)}
+.expand-btn{background:#1e1e1e;border:1px solid #1e1e1e;color:#fff;padding:4px 14px;border-radius:3px;font-size:11px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:5px;font-family:inherit;transition:background .15s}
+.expand-btn:hover{background:#000}
 .drill-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
 .drill-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;font-weight:600}
 
@@ -391,15 +393,15 @@ th:hover .col-rh,.col-rh:hover,.col-rh.rh-drag{opacity:1;background:rgba(255,255
       <div id="placa-search-result" style="margin-top:12px"></div>
     </div>
     <div id="panel-geral" class="panel active">
-      <div class="drill-bar"><div class="drill-label">Todas as regionais</div><div style="display:flex;gap:8px"><button class="export-btn" id="expall_geral" onclick="toggleAllDetails('geral')">⊞ Expandir todos</button><button class="export-btn" onclick="exportCSV('geral')">⬇ CSV</button></div></div>
+      <div class="drill-bar"><div class="drill-label">Todas as regionais</div><div style="display:flex;gap:8px"><button class="expand-btn" id="expall_geral" onclick="toggleAllDetails('geral')">⊞ Expandir todos</button><button class="export-btn" onclick="exportCSV('geral')">⬇ CSV</button></div></div>
       <div class="tbl-wrap"><table id="tbl-geral"></table></div>
     </div>
     <div id="panel-bace" class="panel">
-      <div class="drill-bar"><div class="drill-label">Bahia e Ceará</div><div style="display:flex;gap:8px"><button class="export-btn" id="expall_bace" onclick="toggleAllDetails('bace')">⊞ Expandir todos</button><button class="export-btn" onclick="exportCSV('bace')">⬇ CSV</button></div></div>
+      <div class="drill-bar"><div class="drill-label">Bahia e Ceará</div><div style="display:flex;gap:8px"><button class="expand-btn" id="expall_bace" onclick="toggleAllDetails('bace')">⊞ Expandir todos</button><button class="export-btn" onclick="exportCSV('bace')">⬇ CSV</button></div></div>
       <div class="tbl-wrap"><table id="tbl-bace"></table></div>
     </div>
     <div id="panel-pepb" class="panel">
-      <div class="drill-bar"><div class="drill-label">Pernambuco e Paraíba</div><div style="display:flex;gap:8px"><button class="export-btn" id="expall_pepb" onclick="toggleAllDetails('pepb')">⊞ Expandir todos</button><button class="export-btn" onclick="exportCSV('pepb')">⬇ CSV</button></div></div>
+      <div class="drill-bar"><div class="drill-label">Pernambuco e Paraíba</div><div style="display:flex;gap:8px"><button class="expand-btn" id="expall_pepb" onclick="toggleAllDetails('pepb')">⊞ Expandir todos</button><button class="export-btn" onclick="exportCSV('pepb')">⬇ CSV</button></div></div>
       <div class="tbl-wrap"><table id="tbl-pepb"></table></div>
     </div>
   </div>
