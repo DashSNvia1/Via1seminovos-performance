@@ -166,6 +166,51 @@ td:last-child{border-right:none}
 /* ── Column resizer ─────────────────────────────────────────────── */
 .col-rh{position:absolute;right:0;top:0;width:5px;height:100%;cursor:col-resize;z-index:2;opacity:0;transition:opacity .12s;border-radius:0 2px 2px 0}
 th:hover .col-rh,.col-rh:hover,.col-rh.rh-drag{opacity:1;background:rgba(255,255,255,.35)}
+/* ── RESPONSIVO (celular / tablet) ──────────────────────────────── */
+@media (max-width:768px){
+  .topbar{height:auto;min-height:48px;padding:8px 12px;flex-wrap:wrap;gap:6px}
+  .topbar-title{margin-left:10px;padding-left:10px}
+  .topbar-title h1{font-size:14px}
+  .topbar-title p{font-size:8px;letter-spacing:1px}
+  .topbar-right{margin-left:auto;gap:6px}
+  .last-update{font-size:9px;max-width:120px;text-align:right;line-height:1.2}
+  .logo-img{height:30px}
+
+  /* KPIs deixam de ser uma faixa esmagada e viram grade de 2 colunas */
+  .kpi-strip{flex-wrap:wrap;gap:1px;margin:0 12px 12px}
+  .kpi{flex:1 1 calc(50% - 1px);min-width:calc(50% - 1px);padding:8px 10px}
+  .kpi-val{font-size:16px}
+  .kpi-label{font-size:8px;letter-spacing:1px}
+
+  /* Filtros e linhas de controle empilham em vez de cortar */
+  .config-grid{grid-template-columns:1fr;gap:12px}
+
+  /* Botões de filtro com min-width inline encolhem e quebram linha no celular */
+  [id$="-body"] button[onclick*="Dropdown"],
+  [id$="-body"] button[onclick*="DD()"],
+  button[onclick*="LojaDropdown"], button[onclick*="EstoqueDropdown"],
+  button[onclick*="toggleOfDD"]{
+    min-width:0 !important; width:auto; max-width:100%;
+  }
+
+  /* Tabelas: rolagem horizontal por toque (já têm overflow), com dica visual */
+  .tbl-wrap{ -webkit-overflow-scrolling:touch; }
+  table{font-size:11px}
+  thead th{padding:7px 8px;font-size:9px}
+  td{padding:6px 8px !important}
+
+  /* Conteúdo geral com menos margem lateral para aproveitar a tela */
+  .kpi-strip, .panel, [id$="-body"]{ }
+}
+@media (max-width:480px){
+  .topbar-title p{display:none}
+  .kpi{flex:1 1 100%;min-width:100%}
+  .kpi-val{font-size:18px}
+  .ptab{padding:7px 12px}
+  /* Dropdowns de filtro ocupam a largura disponível */
+  .sheet-select{min-width:0 !important;width:100%}
+}
+/* Faz a tabela "respirar" o conteúdo em telas largas, sem afetar mobile */
 </style>
 </head>
 <body>
@@ -338,15 +383,15 @@ th:hover .col-rh,.col-rh:hover,.col-rh.rh-drag{opacity:1;background:rgba(255,255
       <div id="placa-search-result" style="margin-top:12px"></div>
     </div>
     <div id="panel-geral" class="panel active">
-      <div class="drill-bar"><div class="drill-label">Todas as regionais</div><button class="export-btn" onclick="exportCSV('geral')">⬇ CSV</button></div>
+      <div class="drill-bar"><div class="drill-label">Todas as regionais</div><div style="display:flex;gap:8px"><button class="export-btn" id="expall_geral" onclick="toggleAllDetails('geral')">⊞ Expandir todos</button><button class="export-btn" onclick="exportCSV('geral')">⬇ CSV</button></div></div>
       <div class="tbl-wrap"><table id="tbl-geral"></table></div>
     </div>
     <div id="panel-bace" class="panel">
-      <div class="drill-bar"><div class="drill-label">Bahia e Ceará</div><button class="export-btn" onclick="exportCSV('bace')">⬇ CSV</button></div>
+      <div class="drill-bar"><div class="drill-label">Bahia e Ceará</div><div style="display:flex;gap:8px"><button class="export-btn" id="expall_bace" onclick="toggleAllDetails('bace')">⊞ Expandir todos</button><button class="export-btn" onclick="exportCSV('bace')">⬇ CSV</button></div></div>
       <div class="tbl-wrap"><table id="tbl-bace"></table></div>
     </div>
     <div id="panel-pepb" class="panel">
-      <div class="drill-bar"><div class="drill-label">Pernambuco e Paraíba</div><button class="export-btn" onclick="exportCSV('pepb')">⬇ CSV</button></div>
+      <div class="drill-bar"><div class="drill-label">Pernambuco e Paraíba</div><div style="display:flex;gap:8px"><button class="export-btn" id="expall_pepb" onclick="toggleAllDetails('pepb')">⊞ Expandir todos</button><button class="export-btn" onclick="exportCSV('pepb')">⬇ CSV</button></div></div>
       <div class="tbl-wrap"><table id="tbl-pepb"></table></div>
     </div>
   </div>
@@ -1179,6 +1224,22 @@ function toggleDetail(did,i,tableId) {
   const open=row.classList.contains('open');
   row.classList.toggle('open',!open);
   if(btn){btn.textContent=open?'⊞':'⊟';}
+}
+
+// Expande/recolhe TODOS os modelos da tabela (geral/bace/pepb)
+function toggleAllDetails(tableId) {
+  const rows=document.querySelectorAll('#tbl-'+tableId+' tr.detail-row[id^="d_'+tableId+'_"]');
+  if(!rows.length) return;
+  // se algum estiver fechado, abre todos; se todos abertos, fecha todos
+  let anyClosed=false;
+  rows.forEach(r=>{ if(!r.classList.contains('open')) anyClosed=true; });
+  rows.forEach(r=>{
+    r.classList.toggle('open',anyClosed);
+    const btn=document.getElementById('eb_'+r.id);
+    if(btn) btn.textContent=anyClosed?'⊟':'⊞';
+  });
+  const tb=document.getElementById('expall_'+tableId);
+  if(tb) tb.innerHTML = anyClosed?'⊟ Recolher todos':'⊞ Expandir todos';
 }
 
 function sortDetail(did,col,_) {
