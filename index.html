@@ -5021,15 +5021,20 @@ function renderOficinaContent() {
   const totCusto = rows.reduce((s,r)=>s+r.custo,0);
   const consAtivos = new Set(rows.map(r=>r.cons)).size;
   const prodAtivos = new Set(rows.map(r=>r.prod)).size;
-  const kpi = (l,v,c) => '<div style="background:#fff;border:1px solid var(--border);border-left:3px solid '+c+';border-radius:3px;padding:.65rem 1.2rem;min-width:150px">'
+  // Custo Médio = soma do custo (exceto S2 e SE) ÷ quantidade de O.S do tipo S1
+  const _excl = t => { const u=String(t||'').trim().toUpperCase(); return u.startsWith('S2')||u.startsWith('SE'); };
+  const _isS1m = t => String(t||'').trim().toUpperCase().startsWith('S1');
+  const custoMedia = rows.filter(r=>!_excl(r.tipo)).reduce((s,r)=>s+r.custo,0);
+  const qtdS1Geral = rows.filter(r=>_isS1m(r.tipo)).length;
+  const kpi = (l,v,c,tt) => '<div style="background:#fff;border:1px solid var(--border);border-left:3px solid '+c+';border-radius:3px;padding:.65rem 1.2rem;min-width:150px"'+(tt?' title="'+tt+'"':'')+'>'
     +'<p style="font-size:10px;color:var(--muted);margin:0 0 2px;text-transform:uppercase;letter-spacing:.5px;font-weight:600">'+l+'</p>'
     +'<p style="font-size:20px;font-weight:700;margin:0">'+v+'</p></div>';
   if(kpiBox) kpiBox.innerHTML =
-    kpi('Total O.S',     _ofFmtN(totOS),            '#1a3c8a')+
-    kpi('Custo Total',   _ofFmtR(totCusto),         '#1a7a4c')+
-    kpi('Custo Médio/OS',_ofFmtR(totOS?totCusto/totOS:0),'#7a5a00')+
-    kpi('Consultores',   _ofFmtN(consAtivos),       '#6a1a7a')+
-    kpi('Produtivos',    _ofFmtN(prodAtivos),       '#1a6a7a');
+    kpi('Total O.S',     _ofFmtN(totOS),                                  '#1a3c8a')+
+    kpi('Custo Total',   _ofFmtR(totCusto),                               '#1a7a4c')+
+    kpi('Custo Médio/OS',_ofFmtR(qtdS1Geral?custoMedia/qtdS1Geral:0),     '#7a5a00','Custo (exceto S2 e SE) dividido pela quantidade de O.S do tipo S1')+
+    kpi('Consultores',   _ofFmtN(consAtivos),                             '#6a1a7a')+
+    kpi('Produtivos',    _ofFmtN(prodAtivos),                             '#1a6a7a');
 
   // ── Camada 2: Matriz Loja × Tipo O.S ──
   const tiposVisiveis = [...new Set(rows.map(r=>r.tipo))];
@@ -5040,9 +5045,11 @@ function renderOficinaContent() {
   const porLoja = {};
   const _isS1 = t => String(t||'').trim().toUpperCase().startsWith('S1');
   rows.forEach(r=>{
-    if(!porLoja[r.loja]) porLoja[r.loja]={tot:0,custo:0,tipos:{},cons:{},prods:{}};
+    if(!porLoja[r.loja]) porLoja[r.loja]={tot:0,custo:0,custoMedia:0,s1:0,tipos:{},cons:{},prods:{}};
     const L=porLoja[r.loja];
     L.tot++; L.custo+=r.custo;
+    if(!_excl(r.tipo)) L.custoMedia+=r.custo;
+    if(_isS1m(r.tipo)) L.s1++;
     if(!L.tipos[r.tipo]) L.tipos[r.tipo]={qtd:0,custo:0};
     L.tipos[r.tipo].qtd++; L.tipos[r.tipo].custo+=r.custo;
     if(!L.cons[r.cons]) L.cons[r.cons]={qtd:0,custo:0};
@@ -5072,7 +5079,7 @@ function renderOficinaContent() {
       +tiposVisiveis.map(t=>'<td style="'+TD+';text-align:right">'+(L.tipos[t]?_ofFmtN(L.tipos[t].qtd):'<span style="color:#ccc">—</span>')+'</td>').join('')
       +'<td style="'+TD+';text-align:right;font-weight:700;border-left:2px solid var(--border)">'+_ofFmtN(L.tot)+'</td>'
       +'<td style="'+TD+';text-align:right">'+_ofFmtR(L.custo)+'</td>'
-      +'<td style="'+TD+';text-align:right">'+_ofFmtR(L.tot?L.custo/L.tot:0)+'</td>'
+      +'<td style="'+TD+';text-align:right">'+_ofFmtR(L.s1?L.custoMedia/L.s1:0)+'</td>'
       +'</tr>';
 
     // ── Camada 3: drill-down (consultores + produtivos da loja) ──
@@ -5127,7 +5134,7 @@ function renderOficinaContent() {
     +tiposVisiveis.map(t=>'<td style="'+TD+';text-align:right">'+_ofFmtN(rows.filter(r=>r.tipo===t).length)+'</td>').join('')
     +'<td style="'+TD+';text-align:right;border-left:2px solid #444">'+_ofFmtN(totOS)+'</td>'
     +'<td style="'+TD+';text-align:right">'+_ofFmtR(totCusto)+'</td>'
-    +'<td style="'+TD+';text-align:right">'+_ofFmtR(totOS?totCusto/totOS:0)+'</td>'
+    +'<td style="'+TD+';text-align:right">'+_ofFmtR(qtdS1Geral?custoMedia/qtdS1Geral:0)+'</td>'
     +'</tr></tbody></table></div>';
   mtxBox.innerHTML=m;
 
