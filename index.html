@@ -142,8 +142,15 @@ td:last-child{border-right:none}
 .no-data{text-align:center;padding:3rem;color:var(--muted)}
 
 /* PAGE TABS */
-.page-tabs{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:2px solid var(--black);display:flex;padding:0 16px;z-index:100}
-.ptab{padding:7px 16px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#aaa;border-top:2px solid transparent;cursor:pointer;white-space:nowrap;margin-top:-2px;transition:color .15s,border-color .15s;user-select:none}
+.page-tabs-wrap{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:2px solid var(--black);z-index:100;display:flex;align-items:stretch}
+.page-tabs{display:flex;padding:0 8px;overflow-x:auto;overflow-y:hidden;flex:1;scroll-behavior:smooth;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.page-tabs::-webkit-scrollbar{display:none;height:0}
+.ptab-arrow{flex:0 0 auto;width:30px;border:none;background:#fff;color:#888;font-size:15px;cursor:pointer;display:none;align-items:center;justify-content:center;font-weight:700}
+.ptab-arrow:hover{color:var(--ink);background:#f2f1ec}
+.ptab-arrow.show{display:flex}
+.ptab-arrow.l{box-shadow:6px 0 8px -6px rgba(0,0,0,.25)}
+.ptab-arrow.r{box-shadow:-6px 0 8px -6px rgba(0,0,0,.25)}
+.ptab{padding:7px 16px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#aaa;border-top:2px solid transparent;cursor:pointer;white-space:nowrap;margin-top:-2px;transition:color .15s,border-color .15s;user-select:none;flex:0 0 auto}
 .ptab.active{color:var(--ink);border-top-color:var(--ink)}
 .ptab.drag-over{border-top-color:var(--accent);color:var(--accent);opacity:.7}
 
@@ -502,7 +509,9 @@ th:hover .col-rh,.col-rh:hover,.col-rh.rh-drag{opacity:1;background:rgba(255,255
 </div>
 
 <!-- PAGE TABS -->
-<div class="page-tabs" id="pageTabs">
+<div class="page-tabs-wrap">
+  <button class="ptab-arrow l" id="ptabArrowL" onclick="scrollTabs(-1)" aria-label="Anterior">‹</button>
+  <div class="page-tabs" id="pageTabs">
   <div class="ptab active" id="ptVendas" data-page="vendas" draggable="true">Vendas por Modelo</div>
   <div class="ptab" id="ptAging" data-page="aging" draggable="true">Aging Vendas</div>
   <div class="ptab" id="ptGiro" data-page="giro" draggable="true">Giro de Estoque</div>
@@ -515,6 +524,8 @@ th:hover .col-rh,.col-rh:hover,.col-rh.rh-drag{opacity:1;background:rgba(255,255
   <div class="ptab" id="ptOficina" data-page="oficina" draggable="true">Oficina</div>
   <div class="ptab" id="ptBackCusto" data-page="back-custo" draggable="true">Back - Custo</div>
   <div class="ptab" id="ptVendaTop10" data-page="venda-top10" draggable="true">Venda Top 10</div>
+  </div>
+  <button class="ptab-arrow r" id="ptabArrowR" onclick="scrollTabs(1)" aria-label="Próximo">›</button>
 </div>
 
 <script>
@@ -5438,6 +5449,30 @@ function renderBackCustoTable() {
     document.querySelectorAll('table').forEach(apply);
   }
   if(document.body)init(); else document.addEventListener('DOMContentLoaded',init);
+})();
+// ── ABAS ROLÁVEIS (telas menores) ─────────────────────────────────────────────
+(function(){
+  var tabs=document.getElementById('pageTabs');
+  if(!tabs) return;
+  var aL=document.getElementById('ptabArrowL'), aR=document.getElementById('ptabArrowR');
+  function upd(){
+    var sc=tabs.scrollWidth>tabs.clientWidth+2;
+    if(aL) aL.classList.toggle('show', sc && tabs.scrollLeft>2);
+    if(aR) aR.classList.toggle('show', sc && tabs.scrollLeft < tabs.scrollWidth-tabs.clientWidth-2);
+  }
+  window.scrollTabs=function(dir){ tabs.scrollBy({left:dir*Math.max(160,tabs.clientWidth*0.6),behavior:'smooth'}); };
+  tabs.addEventListener('scroll',upd,{passive:true});
+  window.addEventListener('resize',upd);
+  // arrasto com o dedo/mouse já é nativo (overflow:auto + touch); aqui só atualiza setas
+  setTimeout(upd,150); setTimeout(upd,600);
+  // mantém a aba ativa visível ao trocar
+  var _oldSwitch=window.switchPage;
+  if(typeof _oldSwitch==='function'){
+    window.switchPage=function(p){ _oldSwitch(p);
+      var el=tabs.querySelector('.ptab.active'); if(el&&el.scrollIntoView) el.scrollIntoView({inline:'center',block:'nearest',behavior:'smooth'});
+      setTimeout(upd,50);
+    };
+  }
 })();
 // ─────────────────────────────────────────────────────────────────────────────
 </script>
