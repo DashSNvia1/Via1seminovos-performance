@@ -707,7 +707,9 @@ let API_VENDAS  = _ls('v1_vendas',  URL_VENDAS);
 let API_AVAL    = _ls('v1_aval',    URL_AVAL);
 let API_ACOMP   = _ls('v1_acomp',   'https://script.google.com/macros/s/AKfycbwi67zRTahAD7b_KbqIrH9d1g0FKETD5Ui-o4azwDL64W3Wdoo7NfmmIYyIy7wOh1SCuA/exec');
 let API_ESTOQUE = _ls('v1_estoque', 'https://script.google.com/macros/s/AKfycbzO8yYahoKvXi4LjVFOGzDciDkO2EDmqu605nuHmfdFZkswSLSrnJcm7MaLotbK5s-J/exec');
-let API_OFICINA = _ls('v1_oficina', 'https://script.google.com/macros/s/AKfycbwzIukMNDvpxtXcsVs8VcTzG6Kf6lhm-PALfLiErusEy1ki8z0UXGWuuBRr-faTqaoj/exec');
+// Oficina: URL FIXA embutida (não usa localStorage, para sempre subir certa no GitHub).
+let API_OFICINA = 'https://script.google.com/macros/s/AKfycbwzIukMNDvpxtXcsVs8VcTzG6Kf6lhm-PALfLiErusEy1ki8z0UXGWuuBRr-faTqaoj/exec';
+try { _lsRm('v1_oficina'); } catch(e){}
 let API_BACKCUSTO = _ls('v1_backcusto', 'https://script.google.com/macros/s/AKfycbyAzcotkcj1pwu_ZnvKN8-lNUjYYyaZmei3yy-fhGxtr8YTZQ7NZSZf5Aa403KO0Mk0/exec');
 let API_BACKPRODPE = _ls('v1_backprodpe', '');
 let store = {geral:[],bace:[],pepb:[]};
