@@ -707,7 +707,7 @@ let API_VENDAS  = _ls('v1_vendas',  URL_VENDAS);
 let API_AVAL    = _ls('v1_aval',    URL_AVAL);
 let API_ACOMP   = _ls('v1_acomp',   'https://script.google.com/macros/s/AKfycbwi67zRTahAD7b_KbqIrH9d1g0FKETD5Ui-o4azwDL64W3Wdoo7NfmmIYyIy7wOh1SCuA/exec');
 let API_ESTOQUE = _ls('v1_estoque', 'https://script.google.com/macros/s/AKfycbzO8yYahoKvXi4LjVFOGzDciDkO2EDmqu605nuHmfdFZkswSLSrnJcm7MaLotbK5s-J/exec');
-let API_OFICINA = _ls('v1_oficina', 'https://script.google.com/macros/s/AKfycbzqesLKW0dxtubxb_YJSAlzWdWoXoadJxZNh1nptKX4jhnN--3Fv454L0BuVmxZudAa/exec');
+let API_OFICINA = _ls('v1_oficina', 'https://script.google.com/macros/s/AKfycbwzIukMNDvpxtXcsVs8VcTzG6Kf6lhm-PALfLiErusEy1ki8z0UXGWuuBRr-faTqaoj/exec');
 let API_BACKCUSTO = _ls('v1_backcusto', 'https://script.google.com/macros/s/AKfycbyAzcotkcj1pwu_ZnvKN8-lNUjYYyaZmei3yy-fhGxtr8YTZQ7NZSZf5Aa403KO0Mk0/exec');
 let API_BACKPRODPE = _ls('v1_backprodpe', '');
 let store = {geral:[],bace:[],pepb:[]};
@@ -4935,6 +4935,7 @@ function renderVendaTop10() {
 // ── OFICINA ───────────────────────────────────────────────────────────────────
 let _ofRows = [];
 let _ofSheet = '';
+let _ofDupRem = 0;
 let _ofAll = {loja:[], tipo:[], cons:[], prod:[]};
 let _ofSel = {loja:new Set(), tipo:new Set(), cons:new Set(), prod:new Set()};
 
@@ -4989,9 +4990,12 @@ function loadOficinaSheet(name) {
       tipo: String(r['TipoOS']||'').trim()    || '(sem tipo)',
       cons: String(r['Consultor']||'').trim() || '(sem consultor)',
       prod: String(r['Produtivo']||'').trim() || '(sem produtivo)',
+      placa: String(r['Placa']||'').trim(),
+      os:   String(r['OS']||'').trim(),
       loja: String(r['Loja']||'').trim(),
       custo: _ofNum(r['Custo'])
     })).filter(r => r.loja);
+    _ofDupRem = data.duplicadasRemovidas || 0;
 
     _ofAll.loja = [...new Set(_ofRows.map(r=>r.loja))].sort();
     _ofAll.tipo = [...new Set(_ofRows.map(r=>r.tipo))].sort();
@@ -5116,7 +5120,8 @@ function renderOficinaContent() {
     kpi('Custo Total',   _ofFmtR(totCusto),                               '#1a7a4c')+
     kpi('Custo Médio/OS',_ofFmtR(qtdS1Geral?custoMedia/qtdS1Geral:0),     '#7a5a00','Custo (exceto S2 e SE) dividido pela quantidade de O.S do tipo S1')+
     kpi('Consultores',   _ofFmtN(consAtivos),                             '#6a1a7a')+
-    kpi('Produtivos',    _ofFmtN(prodAtivos),                             '#1a6a7a');
+    kpi('Produtivos',    _ofFmtN(prodAtivos),                             '#1a6a7a')
+    + (_ofDupRem>0 ? '<div style="flex-basis:100%;font-size:11px;color:var(--muted);margin-top:-4px">✓ '+_ofFmtN(_ofDupRem)+' O.S duplicada'+(_ofDupRem>1?'s':'')+' removida'+(_ofDupRem>1?'s':'')+' na validação (mesma placa + tipo + nº O.S)</div>' : '');
 
   // ── Camada 2: Matriz Loja × Tipo O.S ──
   const tiposVisiveis = [...new Set(rows.map(r=>r.tipo))];
