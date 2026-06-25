@@ -306,7 +306,7 @@ th:hover .col-rh,.col-rh:hover,.col-rh.rh-drag{opacity:1;background:rgba(255,255
       <div class="config-status" id="st-backcusto"></div>
     </div>
     <div>
-      <div class="config-box-title">🔩 Back - Produtivo PE</div>
+      <div class="config-box-title">🔩 Back Produtivo</div>
       <div class="config-row">
         <input class="config-input" id="apiUrl7" type="text" placeholder="https://script.google.com/...">
         <button class="btn-save" onclick="saveURL('backprodpe')">Salvar</button>
@@ -547,6 +547,16 @@ th:hover .col-rh,.col-rh:hover,.col-rh.rh-drag{opacity:1;background:rgba(255,255
   </div>
 </div>
 
+<div id="pageBackProd" style="display:none">
+  <div style="background:#fff;border-bottom:1px solid var(--border);padding:6px 20px;display:flex;align-items:center;gap:8px">
+    <span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Aba:</span>
+    <select class="sheet-select" id="backProdSheetSelect" onchange="loadBackProdSheet(this.value)" style="min-width:200px"></select>
+  </div>
+  <div style="padding:16px 20px 60px" id="back-prod-body">
+    <div style="padding:2rem;color:var(--muted)">Configure a URL da API <b>Back Produtivo</b> nas configurações (⚙) para carregar esta aba.</div>
+  </div>
+</div>
+
 <div id="pageOficina" style="display:none">
   <div style="background:#fff;border-bottom:1px solid var(--border);padding:6px 20px;display:flex;align-items:center;gap:8px">
     <span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Aba:</span>
@@ -578,6 +588,7 @@ th:hover .col-rh,.col-rh:hover,.col-rh.rh-drag{opacity:1;background:rgba(255,255
   <div class="ptab" id="ptAgingOficina" data-page="aging-oficina" draggable="true">Aging Oficina</div>
   <div class="ptab" id="ptOficina" data-page="oficina" draggable="true">Oficina</div>
   <div class="ptab" id="ptBackCusto" data-page="back-custo" draggable="true">Back - Custo</div>
+  <div class="ptab" id="ptBackProd" data-page="back-prod" draggable="true">Back - Produtivo</div>
   <div class="ptab" id="ptVendaTop10" data-page="venda-top10" draggable="true">Venda Top 10</div>
   </div>
   <button class="ptab-arrow r" id="ptabArrowR" onclick="scrollTabs(1)" aria-label="Próximo">›</button>
@@ -711,7 +722,9 @@ let API_ESTOQUE = _ls('v1_estoque', 'https://script.google.com/macros/s/AKfycbzO
 let API_OFICINA = 'https://script.google.com/macros/s/AKfycbwzIukMNDvpxtXcsVs8VcTzG6Kf6lhm-PALfLiErusEy1ki8z0UXGWuuBRr-faTqaoj/exec';
 try { _lsRm('v1_oficina'); } catch(e){}
 let API_BACKCUSTO = _ls('v1_backcusto', 'https://script.google.com/macros/s/AKfycbyAzcotkcj1pwu_ZnvKN8-lNUjYYyaZmei3yy-fhGxtr8YTZQ7NZSZf5Aa403KO0Mk0/exec');
-let API_BACKPRODPE = _ls('v1_backprodpe', '');
+// Back Produtivo: URL FIXA embutida (não usa localStorage, para sempre subir certa no GitHub).
+let API_BACKPRODPE = 'https://script.google.com/macros/s/AKfycbwmVX60iVzduHkKPdZdomhekKQnL-OMXoTHIlCO9lCWCwXT_od3p-ealpJiWo4dnl0FUg/exec';
+try { _lsRm('v1_backprodpe'); } catch(e){}
 let store = {geral:[],bace:[],pepb:[]};
 let rawRows = {geral:[],bace:[],pepb:[]};
 let avalData = null;
@@ -770,7 +783,10 @@ function saveURL(which) {
     const selbc=document.getElementById('backCustoSheetSelect'); if(selbc) selbc.innerHTML='';
     if(typeof initBackCustoPage==='function') initBackCustoPage();
   }
-  else if(which==='backprodpe'){ API_BACKPRODPE=val; _lsSet(key,val); }
+  else if(which==='backprodpe'){ API_BACKPRODPE=val; _lsSet(key,val);
+    const selbp=document.getElementById('backProdSheetSelect'); if(selbp) selbp.innerHTML='';
+    if(typeof initBackProdPage==='function') initBackProdPage();
+  }
   else                        { API_OFICINA=val; _lsSet(key,val); }
   const st = document.getElementById(stId);
   st.textContent='✓ Salvo'; st.style.color='var(--green)';
@@ -826,6 +842,7 @@ function switchPage(page) {
   const _pao=document.getElementById('pageAgingOficina');if(_pao)_pao.style.display=page==='aging-oficina'?'block':'none';
   const _po=document.getElementById('pageOficina');if(_po)_po.style.display=page==='oficina'?'block':'none';
   const _pbc=document.getElementById('pageBackCusto');if(_pbc)_pbc.style.display=page==='back-custo'?'block':'none';
+  const _pbp=document.getElementById('pageBackProd');if(_pbp)_pbp.style.display=page==='back-prod'?'block':'none';
   const _pvt=document.getElementById('pageVendaTop10');if(_pvt)_pvt.style.display=page==='venda-top10'?'block':'none';
   document.getElementById('filterBar').style.display   = page==='vendas'&&document.getElementById('sheetSelect').options.length>0?'flex':'none';
   document.getElementById('avalFilterBar').style.display = isAval?'flex':'none';
@@ -840,9 +857,11 @@ function switchPage(page) {
   const _ptao=document.getElementById('ptAgingOficina');if(_ptao)_ptao.classList.toggle('active',page==='aging-oficina');
   const _pto=document.getElementById('ptOficina');if(_pto)_pto.classList.toggle('active',page==='oficina');
   const _ptbc=document.getElementById('ptBackCusto');if(_ptbc)_ptbc.classList.toggle('active',page==='back-custo');
+  const _ptbp=document.getElementById('ptBackProd');if(_ptbp)_ptbp.classList.toggle('active',page==='back-prod');
   const _ptvt=document.getElementById('ptVendaTop10');if(_ptvt)_ptvt.classList.toggle('active',page==='venda-top10');
   if(page==='oficina') initOficinaPage();
   if(page==='back-custo') initBackCustoPage();
+  if(page==='back-prod') initBackProdPage();
   if(page==='venda-top10') initVendaTop10Page();
   if(page==='aging-estoque') initAgingEstoquePage();
   if(page==='aging-oficina') initAgingOficinaPage();
@@ -5528,6 +5547,281 @@ function renderBackCustoTable() {
   }
   if(document.body)init(); else document.addEventListener('DOMContentLoaded',init);
 })();
+// ── BACK - PRODUTIVO (transferências veiculares) ──────────────────────────────
+let _bpRows = [];
+let _bpAll = {regiao:[], loja:[], prod:[]};
+let _bpSel = {regiao:new Set(), loja:new Set(), prod:new Set()};
+
+// etapas exibidas (chave no objeto -> rótulo)
+const _BP_ETAPAS = [
+  ['Averbacao','Averbação'], ['Despachante','Despachante'], ['Emissao','Emissão'],
+  ['SolicPlaca','Solic. Placa'], ['ComunicVenda','Com. Venda'],
+  ['Renavam','Renavam'], ['Cartorio','Cartório'], ['Financeira','Financeira']
+];
+
+const _bpFmtN = v => v.toLocaleString('pt-BR');
+const _bpPct = (n,d) => d ? Math.round(n/d*100) : 0;
+
+function initBackProdPage() {
+  const body = document.getElementById('back-prod-body');
+  if(!API_BACKPRODPE) {
+    body.innerHTML = '<div style="padding:2rem;color:var(--muted)">Configure a URL da API <b>Back Produtivo</b> nas configurações (⚙).</div>';
+    return;
+  }
+  const sel = document.getElementById('backProdSheetSelect');
+  if(!sel) return;
+  if(sel.options.length > 1) { if(sel.value) loadBackProdSheet(sel.value); return; }
+  sel.innerHTML = '<option>Carregando abas...</option>';
+  jsonp(API_BACKPRODPE, {sheet:'__sheets__'}).then(data => {
+    const sheets = data.sheets || [];
+    sel.innerHTML = sheets.map(s => '<option value="'+s+'">'+s+'</option>').join('');
+    if(sel.options.length) { sel.value = sel.options[0].value; loadBackProdSheet(sel.value); }
+  }).catch(() => { sel.innerHTML = '<option>Erro ao carregar abas</option>'; });
+}
+
+function loadBackProdSheet(name) {
+  const body = document.getElementById('back-prod-body');
+  body.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--muted)"><div class="spin2" style="margin:0 auto 8px"></div>Carregando...</div>';
+  jsonp(API_BACKPRODPE, {sheet:name}).then(data => {
+    if(data.error) throw new Error(data.error);
+    _bpRows = (data.rows||[]).map(r => ({
+      regiao: String(r['Regiao']||'').trim().toUpperCase() || '(sem região)',
+      loja:   String(r['Loja']||'').trim() || '(sem loja)',
+      prod:   String(r['Produtivo']||'').trim() || '(sem produtivo)',
+      placa:  String(r['Placa']||'').trim(),
+      cliente:String(r['Cliente']||'').trim(),
+      concl:  +r['Concluido'] ? 1 : 0,
+      et: {
+        Averbacao:+r['Averbacao']?1:0, Despachante:+r['Despachante']?1:0,
+        Emissao:+r['Emissao']?1:0, SolicPlaca:+r['SolicPlaca']?1:0,
+        ComunicVenda:+r['ComunicVenda']?1:0, Renavam:+r['Renavam']?1:0,
+        Cartorio:+r['Cartorio']?1:0, Financeira:+r['Financeira']?1:0
+      }
+    })).filter(r => r.loja);
+
+    _bpAll.regiao = [...new Set(_bpRows.map(r=>r.regiao))].sort();
+    _bpAll.loja   = [...new Set(_bpRows.map(r=>r.loja))].sort();
+    _bpAll.prod   = [...new Set(_bpRows.map(r=>r.prod))].sort();
+    ['regiao','loja','prod'].forEach(k => _bpSel[k] = new Set(_bpAll[k]));
+
+    renderBackProdShell();
+  }).catch(e => {
+    body.innerHTML = '<div style="padding:2rem;color:var(--red)">Erro: '+e.message+'</div>';
+  });
+}
+
+function _bpFiltered() {
+  return _bpRows.filter(r =>
+    _bpSel.regiao.has(r.regiao) && _bpSel.loja.has(r.loja) && _bpSel.prod.has(r.prod)
+  );
+}
+
+function _bpDDLabel(k){
+  const todos = k==='regiao'?'Todos':(k==='loja'?'Todas':'Todos');
+  return _bpSel[k].size===_bpAll[k].length ? todos : _bpSel[k].size+' selec.';
+}
+function toggleBpDD(k){
+  ['regiao','loja','prod'].forEach(o => {
+    const dd=document.getElementById('bpDD_'+o);
+    if(dd) dd.style.display = (o===k && dd.style.display==='none') ? 'block' : 'none';
+  });
+}
+function toggleBpItem(k, val){
+  if(_bpSel[k].has(val)) _bpSel[k].delete(val); else _bpSel[k].add(val);
+  document.querySelectorAll('.bp-cb-'+k).forEach(cb=>{ if(cb.dataset.v===val) cb.checked=_bpSel[k].has(val); });
+  _applyBpFilters();
+}
+function toggleBpAll(k, checked){
+  document.querySelectorAll('.bp-cb-'+k).forEach(cb=>{
+    cb.checked=checked;
+    if(checked) _bpSel[k].add(cb.dataset.v); else _bpSel[k].delete(cb.dataset.v);
+  });
+  _applyBpFilters();
+}
+function _applyBpFilters(){
+  ['regiao','loja','prod'].forEach(k=>{
+    const lb=document.getElementById('bpLbl_'+k); if(lb) lb.textContent=_bpDDLabel(k);
+  });
+  renderBackProdContent();
+}
+
+function _bpDropdown(k, titulo){
+  const todos = k==='regiao'?'Todos':(k==='loja'?'Todas':'Todos');
+  const opts = _bpAll[k].map(v =>
+    '<label style="display:flex;align-items:center;gap:10px;padding:7px 14px;cursor:pointer;border-bottom:1px solid #f5f4f0;font-size:11px" onmouseenter="this.style.background=\'#f5f4f0\'" onmouseleave="this.style.background=\'\'">'+
+    '<input type="checkbox" class="bp-cb-'+k+'" data-v="'+v.replace(/"/g,'&quot;')+'" checked onchange="toggleBpItem(\''+k+'\',\''+v.replace(/'/g,"\\'")+'\')">'+
+    '<span style="flex:1">'+v+'</span></label>').join('');
+  return '<div style="position:relative;display:inline-block" class="bp-dd-wrap">'+
+    '<button onclick="toggleBpDD(\''+k+'\')" style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--border);border-radius:3px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;min-width:160px;justify-content:space-between">'+
+      '<span>'+titulo+'</span><span id="bpLbl_'+k+'" style="color:var(--muted);font-weight:400">'+_bpDDLabel(k)+'</span><span style="font-size:10px;color:var(--muted)">▼</span>'+
+    '</button>'+
+    '<div id="bpDD_'+k+'" style="display:none;position:absolute;top:100%;left:0;z-index:999;background:#fff;border:1px solid var(--border);border-radius:3px;box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:260px;max-height:300px;overflow-y:auto;margin-top:2px">'+
+      '<label style="display:flex;align-items:center;gap:10px;padding:8px 14px;cursor:pointer;border-bottom:1px solid #e0dfd8;font-size:12px;font-weight:600" onmouseenter="this.style.background=\'#f5f4f0\'" onmouseleave="this.style.background=\'\'">'+
+        '<input type="checkbox" checked onchange="toggleBpAll(\''+k+'\',this.checked)"><span>'+todos+'</span></label>'+
+      opts+
+    '</div>'+
+  '</div>';
+}
+
+function renderBackProdShell() {
+  const body = document.getElementById('back-prod-body'); if(!body) return;
+  if(!_bpRows.length){
+    body.innerHTML = '<div style="padding:2rem;color:var(--muted)">Nenhum registro nesta aba.</div>';
+    return;
+  }
+  body.innerHTML =
+    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">'+
+      _bpDropdown('regiao','Estado')+
+      _bpDropdown('loja','Loja')+
+      _bpDropdown('prod','Produtivo')+
+    '</div>'+
+    '<div id="bp-kpis" style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap"></div>'+
+    '<div id="bp-matrix" style="margin-bottom:24px"></div>'+
+    '<div id="bp-ranks" style="display:flex;gap:16px;flex-wrap:wrap"></div>';
+
+  setTimeout(()=>{
+    document.addEventListener('click', function(e){
+      if(e.target.closest('.bp-dd-wrap')) return;
+      ['regiao','loja','prod'].forEach(k=>{const dd=document.getElementById('bpDD_'+k);if(dd)dd.style.display='none';});
+    });
+  },100);
+
+  renderBackProdContent();
+}
+
+function renderBackProdContent() {
+  const rows = _bpFiltered();
+  const kpiBox = document.getElementById('bp-kpis');
+  const mtxBox = document.getElementById('bp-matrix');
+  const rnkBox = document.getElementById('bp-ranks');
+  if(!mtxBox) return;
+
+  if(!rows.length){
+    if(kpiBox) kpiBox.innerHTML='';
+    mtxBox.innerHTML='<div style="padding:1rem;color:var(--muted)">Sem registros para os filtros selecionados.</div>';
+    if(rnkBox) rnkBox.innerHTML='';
+    return;
+  }
+
+  // ── Camada 1: KPIs ──
+  const total = rows.length;
+  const concl = rows.reduce((s,r)=>s+r.concl,0);
+  const pend  = total - concl;
+  const prodAtivos = new Set(rows.map(r=>r.prod)).size;
+  const lojasAtivas = new Set(rows.map(r=>r.loja)).size;
+  const kpi = (l,v,c,tt) => '<div style="background:#fff;border:1px solid var(--border);border-left:3px solid '+c+';border-radius:3px;padding:.65rem 1.2rem;min-width:140px"'+(tt?' title="'+tt+'"':'')+'>'
+    +'<p style="font-size:10px;color:var(--muted);margin:0 0 2px;text-transform:uppercase;letter-spacing:.5px;font-weight:600">'+l+'</p>'
+    +'<p style="font-size:20px;font-weight:700;margin:0">'+v+'</p></div>';
+  if(kpiBox) kpiBox.innerHTML =
+    kpi('Total Transferências', _bpFmtN(total),                 '#1a3c8a')+
+    kpi('Concluídas',           _bpFmtN(concl),                  '#1a7a4c','Coluna U — Data de Conclusão preenchida')+
+    kpi('Pendentes',            _bpFmtN(pend),                   '#c62828')+
+    kpi('% Conclusão',          _bpPct(concl,total)+'%',         '#7a5a00')+
+    kpi('Produtivos',           _bpFmtN(prodAtivos),             '#6a1a7a')+
+    kpi('Lojas',                _bpFmtN(lojasAtivas),            '#1a6a7a');
+
+  // ── Camada 2: Matriz Produtivo × etapas (% concluído por etapa) ──
+  const porProd = {};
+  rows.forEach(r=>{
+    if(!porProd[r.prod]) { porProd[r.prod]={tot:0,concl:0,et:{},lojas:{}}; _BP_ETAPAS.forEach(e=>porProd[r.prod].et[e[0]]=0); }
+    const P=porProd[r.prod];
+    P.tot++; P.concl+=r.concl;
+    _BP_ETAPAS.forEach(e=>{ P.et[e[0]]+=r.et[e[0]]; });
+    if(!P.lojas[r.loja]) P.lojas[r.loja]={tot:0,concl:0};
+    P.lojas[r.loja].tot++; P.lojas[r.loja].concl+=r.concl;
+  });
+  const prods = Object.entries(porProd).sort((a,b)=>b[1].tot-a[1].tot);
+
+  const BH='background:#1a2a48;color:#fff;padding:8px 10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap';
+  const TD='padding:7px 10px;white-space:nowrap';
+  const pctCell = (n,d) => { const p=_bpPct(n,d); const cor=p>=90?'#1a7a4c':(p>=60?'#7a5a00':'#c62828');
+    return '<td style="'+TD+';text-align:right"><span style="font-weight:700">'+_bpFmtN(n)+'</span> <span style="color:'+cor+';font-size:10px">('+p+'%)</span></td>'; };
+
+  let m='<div class="tbl-wrap" style="border:1px solid var(--border);border-radius:3px;overflow-x:auto">'
+    +'<table style="border-collapse:collapse;font-size:12px;width:100%"><thead><tr>'
+    +'<th style="'+BH+';text-align:left;position:sticky;left:0;background:#1a2a48;z-index:1">Produtivo</th>'
+    +'<th style="'+BH+';text-align:right">Total</th>'
+    +'<th style="'+BH+';text-align:right;border-left:2px solid #2a5a8a">Concluídas</th>'
+    +'<th style="'+BH+';text-align:right">Pendentes</th>'
+    +'<th style="'+BH+';text-align:right">% Concl.</th>'
+    +_BP_ETAPAS.map(e=>'<th style="'+BH+';text-align:right;border-left:1px solid #2a5a8a">'+e[1]+'</th>').join('')
+    +'</tr></thead><tbody>';
+
+  prods.forEach(([prod,P],i)=>{
+    const rid='bp_p_'+i;
+    const pc=_bpPct(P.concl,P.tot); const corpc=pc>=90?'#1a7a4c':(pc>=60?'#7a5a00':'#c62828');
+    m+='<tr style="background:'+(i%2===0?'#fff':'#fafaf8')+';border-bottom:1px solid var(--border);cursor:pointer" onclick="toggleBpProd(\''+rid+'\')">'
+      +'<td style="'+TD+';font-weight:600;position:sticky;left:0;background:inherit"><span id="bp_eb_'+rid+'" style="font-size:11px;color:#888;margin-right:6px">⊞</span>'+prod+'</td>'
+      +'<td style="'+TD+';text-align:right;font-weight:700">'+_bpFmtN(P.tot)+'</td>'
+      +'<td style="'+TD+';text-align:right;color:#1a7a4c;font-weight:700;border-left:2px solid var(--border)">'+_bpFmtN(P.concl)+'</td>'
+      +'<td style="'+TD+';text-align:right;color:#c62828;font-weight:700">'+_bpFmtN(P.tot-P.concl)+'</td>'
+      +'<td style="'+TD+';text-align:right;font-weight:700;color:'+corpc+'">'+pc+'%</td>'
+      +_BP_ETAPAS.map(e=>pctCell(P.et[e[0]],P.tot)).join('')
+      +'</tr>';
+    // drill-down: lojas do produtivo
+    const lojasArr=Object.entries(P.lojas).sort((a,b)=>b[1].tot-a[1].tot);
+    m+='<tr id="bp_det_'+rid+'" style="display:none"><td colspan="'+(5+_BP_ETAPAS.length)+'" style="padding:0;background:#f5f4f0">'
+      +'<div style="position:sticky;left:0;max-width:calc(100vw - 80px);box-sizing:border-box;padding:12px">'
+      +'<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#555;margin-bottom:6px">Lojas — '+prod+'</div>'
+      +'<table style="border-collapse:collapse;font-size:11px;min-width:380px;max-width:560px">'
+      +'<tr style="background:#e0dfd8;font-weight:700"><td style="padding:4px 12px">Loja</td><td style="padding:4px 12px;text-align:right;width:60px">Total</td><td style="padding:4px 12px;text-align:right;width:80px">Concl.</td><td style="padding:4px 12px;text-align:right;width:70px">Pend.</td><td style="padding:4px 12px;text-align:right;width:70px">%</td></tr>'
+      +lojasArr.map(([lj,v],j)=>{const p=_bpPct(v.concl,v.tot);const c=p>=90?'#1a7a4c':(p>=60?'#7a5a00':'#c62828');
+        return '<tr style="background:'+(j%2===0?'#fff':'#f7f6f2')+';border-bottom:1px solid var(--border)">'
+        +'<td style="padding:5px 12px">'+lj+'</td>'
+        +'<td style="padding:5px 12px;text-align:right;font-weight:700">'+_bpFmtN(v.tot)+'</td>'
+        +'<td style="padding:5px 12px;text-align:right;color:#1a7a4c">'+_bpFmtN(v.concl)+'</td>'
+        +'<td style="padding:5px 12px;text-align:right;color:#c62828">'+_bpFmtN(v.tot-v.concl)+'</td>'
+        +'<td style="padding:5px 12px;text-align:right;font-weight:700;color:'+c+'">'+p+'%</td></tr>';}).join('')
+      +'</table></div></td></tr>';
+  });
+
+  // total geral
+  const etTot={}; _BP_ETAPAS.forEach(e=>etTot[e[0]]=rows.reduce((s,r)=>s+r.et[e[0]],0));
+  m+='<tr style="background:#111;color:#fff;font-weight:700">'
+    +'<td style="'+TD+';position:sticky;left:0;background:#111">Total</td>'
+    +'<td style="'+TD+';text-align:right">'+_bpFmtN(total)+'</td>'
+    +'<td style="'+TD+';text-align:right;border-left:2px solid #444">'+_bpFmtN(concl)+'</td>'
+    +'<td style="'+TD+';text-align:right">'+_bpFmtN(pend)+'</td>'
+    +'<td style="'+TD+';text-align:right">'+_bpPct(concl,total)+'%</td>'
+    +_BP_ETAPAS.map(e=>'<td style="'+TD+';text-align:right">'+_bpFmtN(etTot[e[0]])+' ('+_bpPct(etTot[e[0]],total)+'%)</td>').join('')
+    +'</tr></tbody></table></div>';
+  mtxBox.innerHTML=m;
+
+  // ── Camada 3: Ranking por loja e por estado ──
+  const aggBy = key => {
+    const mm={};
+    rows.forEach(r=>{ const k=r[key]; if(!mm[k])mm[k]={tot:0,concl:0}; mm[k].tot++; mm[k].concl+=r.concl; });
+    return Object.entries(mm).sort((a,b)=>b[1].tot-a[1].tot);
+  };
+  const rank=(titulo,arr,cor)=>{
+    const max=arr.length?arr[0][1].tot:1;
+    return '<div style="flex:1;min-width:340px;border:1px solid var(--border);border-radius:3px;overflow:hidden">'
+      +'<div style="background:#1e1e1e;color:#fff;padding:8px 14px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px">'+titulo+'</div>'
+      +'<table style="width:100%;border-collapse:collapse;font-size:12px">'
+      +'<tr style="background:#e0dfd8;font-weight:700"><td style="padding:4px 12px" colspan="2">Nome</td><td style="padding:4px 12px;text-align:right">Total</td><td style="padding:4px 12px;text-align:right">Concl.</td><td style="padding:4px 12px;text-align:right">%</td></tr>'
+      +arr.map(([n,v],i)=>{const p=_bpPct(v.concl,v.tot);const c=p>=90?'#1a7a4c':(p>=60?'#7a5a00':'#c62828');
+        return '<tr style="background:'+(i%2===0?'#fff':'#fafaf8')+';border-bottom:1px solid var(--border)">'
+        +'<td style="padding:6px 12px;width:26px;text-align:center;font-weight:700;color:#bbb">'+(i+1)+'</td>'
+        +'<td style="padding:6px 12px;font-weight:600">'+n
+          +'<div style="background:#e8e7e0;border-radius:2px;height:4px;width:110px;overflow:hidden;margin-top:3px"><div style="width:'+Math.round(v.tot/max*110)+'px;background:'+cor+';height:100%"></div></div></td>'
+        +'<td style="padding:6px 12px;text-align:right;font-weight:700">'+_bpFmtN(v.tot)+'</td>'
+        +'<td style="padding:6px 12px;text-align:right;color:#1a7a4c">'+_bpFmtN(v.concl)+'</td>'
+        +'<td style="padding:6px 12px;text-align:right;font-weight:700;color:'+c+'">'+p+'%</td></tr>';}).join('')
+      +'</table></div>';
+  };
+  if(rnkBox) rnkBox.innerHTML = rank('Por Loja',aggBy('loja'),'#1a3c8a') + rank('Por Estado',aggBy('regiao'),'#1a7a4c');
+}
+
+function toggleBpProd(rid){
+  const det=document.getElementById('bp_det_'+rid);
+  const icon=document.getElementById('bp_eb_'+rid);
+  if(!det) return;
+  const open=det.style.display==='none'||det.style.display==='';
+  det.style.display=open?'table-row':'none';
+  if(icon) icon.textContent=open?'⊟':'⊞';
+}
+
+
 // ── ABAS ROLÁVEIS (telas menores) ─────────────────────────────────────────────
 (function(){
   var tabs=document.getElementById('pageTabs');
