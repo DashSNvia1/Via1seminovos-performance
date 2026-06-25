@@ -551,6 +551,12 @@ th:hover .col-rh,.col-rh:hover,.col-rh.rh-drag{opacity:1;background:rgba(255,255
   <div style="background:#fff;border-bottom:1px solid var(--border);padding:6px 20px;display:flex;align-items:center;gap:8px">
     <span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Aba:</span>
     <select class="sheet-select" id="backProdSheetSelect" onchange="loadBackProdSheet(this.value)" style="min-width:200px"></select>
+    <div style="display:flex;align-items:center;gap:6px;margin-left:8px">
+      <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Dias úteis:</label>
+      <input type="number" id="bp-dias-uteis" value="22" min="1" max="31"
+        onchange="bpSetDias()" title="Dias úteis do mês (digite; fica salvo por aba). Usado no PMD."
+        style="width:52px;border:1px solid var(--border2);border-radius:3px;padding:5px 6px;font-size:12px;font-weight:700;text-align:center">
+    </div>
   </div>
   <div style="padding:16px 20px 60px" id="back-prod-body">
     <div style="padding:2rem;color:var(--muted)">Configure a URL da API <b>Back Produtivo</b> nas configurações (⚙) para carregar esta aba.</div>
@@ -5549,18 +5555,26 @@ function renderBackCustoTable() {
 })();
 // ── BACK - PRODUTIVO (transferências veiculares) ──────────────────────────────
 let _bpRows = [];
+let _bpSheet = '';
 let _bpAll = {regiao:[], loja:[], prod:[]};
 let _bpSel = {regiao:new Set(), loja:new Set(), prod:new Set()};
 
-// etapas exibidas (chave no objeto -> rótulo)
-const _BP_ETAPAS = [
-  ['Averbacao','Averbação'], ['Despachante','Despachante'], ['Emissao','Emissão'],
-  ['SolicPlaca','Solic. Placa'], ['ComunicVenda','Com. Venda'],
-  ['Renavam','Renavam'], ['Cartorio','Cartório'], ['Financeira','Financeira']
-];
-
 const _bpFmtN = v => v.toLocaleString('pt-BR');
 const _bpPct = (n,d) => d ? Math.round(n/d*100) : 0;
+const _bpFmt1 = v => v.toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1});
+const _bpFmt2 = v => v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+
+// dias úteis (com memória por aba)
+function _bpDiasUteis(){
+  const di=document.getElementById('bp-dias-uteis');
+  const v=di?parseInt(di.value,10):22;
+  return (v && v>0) ? v : 22;
+}
+function bpSetDias(){
+  const di=document.getElementById('bp-dias-uteis');
+  if(di && _bpSheet) _lsSet('v1_bpdias_'+_bpSheet, di.value);
+  renderBackProdContent();
+}
 
 function initBackProdPage() {
   const body = document.getElementById('back-prod-body');
@@ -5584,19 +5598,17 @@ function loadBackProdSheet(name) {
   body.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--muted)"><div class="spin2" style="margin:0 auto 8px"></div>Carregando...</div>';
   jsonp(API_BACKPRODPE, {sheet:name}).then(data => {
     if(data.error) throw new Error(data.error);
+    _bpSheet = name;
+    const _di = document.getElementById('bp-dias-uteis');
+    if(_di){ const _sv=_ls('v1_bpdias_'+name, ''); _di.value = (_sv!=='') ? _sv : '22'; }
+
     _bpRows = (data.rows||[]).map(r => ({
-      regiao: String(r['Regiao']||'').trim().toUpperCase() || '(sem região)',
+      regiao: String(r['Regiao']||'').trim().toUpperCase() || '(sem estado)',
       loja:   String(r['Loja']||'').trim() || '(sem loja)',
       prod:   String(r['Produtivo']||'').trim() || '(sem produtivo)',
       placa:  String(r['Placa']||'').trim(),
-      cliente:String(r['Cliente']||'').trim(),
       concl:  +r['Concluido'] ? 1 : 0,
-      et: {
-        Averbacao:+r['Averbacao']?1:0, Despachante:+r['Despachante']?1:0,
-        Emissao:+r['Emissao']?1:0, SolicPlaca:+r['SolicPlaca']?1:0,
-        ComunicVenda:+r['ComunicVenda']?1:0, Renavam:+r['Renavam']?1:0,
-        Cartorio:+r['Cartorio']?1:0, Financeira:+r['Financeira']?1:0
-      }
+      dias:   (r['DiasConcl']===null||r['DiasConcl']===undefined||r['DiasConcl']==='') ? null : Number(r['DiasConcl'])
     })).filter(r => r.loja);
 
     _bpAll.regiao = [...new Set(_bpRows.map(r=>r.regiao))].sort();
@@ -5617,7 +5629,7 @@ function _bpFiltered() {
 }
 
 function _bpDDLabel(k){
-  const todos = k==='regiao'?'Todos':(k==='loja'?'Todas':'Todos');
+  const todos = k==='loja'?'Todas':'Todos';
   return _bpSel[k].size===_bpAll[k].length ? todos : _bpSel[k].size+' selec.';
 }
 function toggleBpDD(k){
@@ -5646,7 +5658,7 @@ function _applyBpFilters(){
 }
 
 function _bpDropdown(k, titulo){
-  const todos = k==='regiao'?'Todos':(k==='loja'?'Todas':'Todos');
+  const todos = k==='loja'?'Todas':'Todos';
   const opts = _bpAll[k].map(v =>
     '<label style="display:flex;align-items:center;gap:10px;padding:7px 14px;cursor:pointer;border-bottom:1px solid #f5f4f0;font-size:11px" onmouseenter="this.style.background=\'#f5f4f0\'" onmouseleave="this.style.background=\'\'">'+
     '<input type="checkbox" class="bp-cb-'+k+'" data-v="'+v.replace(/"/g,'&quot;')+'" checked onchange="toggleBpItem(\''+k+'\',\''+v.replace(/'/g,"\\'")+'\')">'+
@@ -5676,8 +5688,7 @@ function renderBackProdShell() {
       _bpDropdown('prod','Produtivo')+
     '</div>'+
     '<div id="bp-kpis" style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap"></div>'+
-    '<div id="bp-matrix" style="margin-bottom:24px"></div>'+
-    '<div id="bp-ranks" style="display:flex;gap:16px;flex-wrap:wrap"></div>';
+    '<div id="bp-matrix" style="margin-bottom:24px"></div>';
 
   setTimeout(()=>{
     document.addEventListener('click', function(e){
@@ -5689,130 +5700,131 @@ function renderBackProdShell() {
   renderBackProdContent();
 }
 
+// Agrega um conjunto de linhas em {qtde, fin, pend, somaDias, nDias}
+function _bpAgg(rows){
+  let qtde=0, fin=0, somaDias=0, nDias=0;
+  rows.forEach(r=>{
+    qtde++; fin+=r.concl;
+    if(r.dias!==null && !isNaN(r.dias)){ somaDias+=r.dias; nDias++; }
+  });
+  return {qtde:qtde, fin:fin, pend:qtde-fin, somaDias:somaDias, nDias:nDias};
+}
+
 function renderBackProdContent() {
   const rows = _bpFiltered();
   const kpiBox = document.getElementById('bp-kpis');
   const mtxBox = document.getElementById('bp-matrix');
-  const rnkBox = document.getElementById('bp-ranks');
   if(!mtxBox) return;
 
   if(!rows.length){
     if(kpiBox) kpiBox.innerHTML='';
     mtxBox.innerHTML='<div style="padding:1rem;color:var(--muted)">Sem registros para os filtros selecionados.</div>';
-    if(rnkBox) rnkBox.innerHTML='';
     return;
   }
 
-  // ── Camada 1: KPIs ──
-  const total = rows.length;
-  const concl = rows.reduce((s,r)=>s+r.concl,0);
-  const pend  = total - concl;
+  const du = _bpDiasUteis();
+  const G = _bpAgg(rows);
+
+  // ── KPIs ──
   const prodAtivos = new Set(rows.map(r=>r.prod)).size;
   const lojasAtivas = new Set(rows.map(r=>r.loja)).size;
+  const tmGeral = G.nDias ? G.somaDias/G.nDias : null;
   const kpi = (l,v,c,tt) => '<div style="background:#fff;border:1px solid var(--border);border-left:3px solid '+c+';border-radius:3px;padding:.65rem 1.2rem;min-width:140px"'+(tt?' title="'+tt+'"':'')+'>'
     +'<p style="font-size:10px;color:var(--muted);margin:0 0 2px;text-transform:uppercase;letter-spacing:.5px;font-weight:600">'+l+'</p>'
     +'<p style="font-size:20px;font-weight:700;margin:0">'+v+'</p></div>';
   if(kpiBox) kpiBox.innerHTML =
-    kpi('Total Transferências', _bpFmtN(total),                 '#1a3c8a')+
-    kpi('Concluídas',           _bpFmtN(concl),                  '#1a7a4c','Coluna U — Data de Conclusão preenchida')+
-    kpi('Pendentes',            _bpFmtN(pend),                   '#c62828')+
-    kpi('% Conclusão',          _bpPct(concl,total)+'%',         '#7a5a00')+
-    kpi('Produtivos',           _bpFmtN(prodAtivos),             '#6a1a7a')+
-    kpi('Lojas',                _bpFmtN(lojasAtivas),            '#1a6a7a');
+    kpi('Total Processos', _bpFmtN(G.qtde),                       '#1a3c8a','Total de placas (todas as linhas)')+
+    kpi('Finalizados',     _bpFmtN(G.fin),                        '#1a7a4c','Status (coluna J) = OK ou FINALIZADO')+
+    kpi('Pendentes',       _bpFmtN(G.pend),                       '#c62828')+
+    kpi('% Conclusão',     _bpPct(G.fin,G.qtde)+'%',              '#7a5a00')+
+    kpi('Tempo Médio',     tmGeral!==null?_bpFmt1(tmGeral)+' dias':'—', '#6a1a7a','Média de dias entre Entrega (I) e Conclusão (U); ignora linhas sem data')+
+    kpi('Produtivos',      _bpFmtN(prodAtivos),                   '#1a6a7a');
 
-  // ── Camada 2: Matriz Produtivo × etapas (% concluído por etapa) ──
-  const porProd = {};
+  // ── Agrega por LOJA (com sub-agregação por produtivo p/ drill-down) ──
+  const porLoja = {};
   rows.forEach(r=>{
-    if(!porProd[r.prod]) { porProd[r.prod]={tot:0,concl:0,et:{},lojas:{}}; _BP_ETAPAS.forEach(e=>porProd[r.prod].et[e[0]]=0); }
-    const P=porProd[r.prod];
-    P.tot++; P.concl+=r.concl;
-    _BP_ETAPAS.forEach(e=>{ P.et[e[0]]+=r.et[e[0]]; });
-    if(!P.lojas[r.loja]) P.lojas[r.loja]={tot:0,concl:0};
-    P.lojas[r.loja].tot++; P.lojas[r.loja].concl+=r.concl;
+    if(!porLoja[r.loja]) porLoja[r.loja]={rows:[], prods:{}};
+    porLoja[r.loja].rows.push(r);
+    if(!porLoja[r.loja].prods[r.prod]) porLoja[r.loja].prods[r.prod]=[];
+    porLoja[r.loja].prods[r.prod].push(r);
   });
-  const prods = Object.entries(porProd).sort((a,b)=>b[1].tot-a[1].tot);
+  const lojas = Object.entries(porLoja)
+    .map(([loja,o])=>[loja, _bpAgg(o.rows), o.prods])
+    .sort((a,b)=>b[1].qtde-a[1].qtde);
 
   const BH='background:#1a2a48;color:#fff;padding:8px 10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap';
   const TD='padding:7px 10px;white-space:nowrap';
-  const pctCell = (n,d) => { const p=_bpPct(n,d); const cor=p>=90?'#1a7a4c':(p>=60?'#7a5a00':'#c62828');
-    return '<td style="'+TD+';text-align:right"><span style="font-weight:700">'+_bpFmtN(n)+'</span> <span style="color:'+cor+';font-size:10px">('+p+'%)</span></td>'; };
 
+  // colunas: Loja | Qtde | Finalizados | Pendentes | % Concl | Tempo Médio | PMD
   let m='<div class="tbl-wrap" style="border:1px solid var(--border);border-radius:3px;overflow-x:auto">'
     +'<table style="border-collapse:collapse;font-size:12px;width:100%"><thead><tr>'
-    +'<th style="'+BH+';text-align:left;position:sticky;left:0;background:#1a2a48;z-index:1">Produtivo</th>'
-    +'<th style="'+BH+';text-align:right">Total</th>'
-    +'<th style="'+BH+';text-align:right;border-left:2px solid #2a5a8a">Concluídas</th>'
+    +'<th style="'+BH+';text-align:left;position:sticky;left:0;background:#1a2a48;z-index:1">Loja</th>'
+    +'<th style="'+BH+';text-align:right">Qtde</th>'
+    +'<th style="'+BH+';text-align:right;border-left:2px solid #2a5a8a">Finalizados</th>'
     +'<th style="'+BH+';text-align:right">Pendentes</th>'
     +'<th style="'+BH+';text-align:right">% Concl.</th>'
-    +_BP_ETAPAS.map(e=>'<th style="'+BH+';text-align:right;border-left:1px solid #2a5a8a">'+e[1]+'</th>').join('')
+    +'<th style="'+BH+';text-align:right" title="Média de dias entre Entrega e Conclusão">Tempo Médio</th>'
+    +'<th style="'+BH+';text-align:right" title="Passagem Média Dia = Qtde ÷ dias úteis">PMD</th>'
     +'</tr></thead><tbody>';
 
-  prods.forEach(([prod,P],i)=>{
-    const rid='bp_p_'+i;
-    const pc=_bpPct(P.concl,P.tot); const corpc=pc>=90?'#1a7a4c':(pc>=60?'#7a5a00':'#c62828');
-    m+='<tr style="background:'+(i%2===0?'#fff':'#fafaf8')+';border-bottom:1px solid var(--border);cursor:pointer" onclick="toggleBpProd(\''+rid+'\')">'
-      +'<td style="'+TD+';font-weight:600;position:sticky;left:0;background:inherit"><span id="bp_eb_'+rid+'" style="font-size:11px;color:#888;margin-right:6px">⊞</span>'+prod+'</td>'
-      +'<td style="'+TD+';text-align:right;font-weight:700">'+_bpFmtN(P.tot)+'</td>'
-      +'<td style="'+TD+';text-align:right;color:#1a7a4c;font-weight:700;border-left:2px solid var(--border)">'+_bpFmtN(P.concl)+'</td>'
-      +'<td style="'+TD+';text-align:right;color:#c62828;font-weight:700">'+_bpFmtN(P.tot-P.concl)+'</td>'
+  lojas.forEach(([loja,A,prods],i)=>{
+    const rid='bp_l_'+i;
+    const pc=_bpPct(A.fin,A.qtde); const corpc=pc>=90?'#1a7a4c':(pc>=60?'#7a5a00':'#c62828');
+    const tm=A.nDias?A.somaDias/A.nDias:null;
+    const pmd=A.qtde/du;
+    m+='<tr style="background:'+(i%2===0?'#fff':'#fafaf8')+';border-bottom:1px solid var(--border);cursor:pointer" onclick="toggleBpLoja(\''+rid+'\')">'
+      +'<td style="'+TD+';font-weight:600;position:sticky;left:0;background:inherit"><span id="bp_eb_'+rid+'" style="font-size:11px;color:#888;margin-right:6px">⊞</span>'+loja+'</td>'
+      +'<td style="'+TD+';text-align:right;font-weight:700">'+_bpFmtN(A.qtde)+'</td>'
+      +'<td style="'+TD+';text-align:right;color:#1a7a4c;font-weight:700;border-left:2px solid var(--border)">'+_bpFmtN(A.fin)+'</td>'
+      +'<td style="'+TD+';text-align:right;color:#c62828;font-weight:700">'+_bpFmtN(A.pend)+'</td>'
       +'<td style="'+TD+';text-align:right;font-weight:700;color:'+corpc+'">'+pc+'%</td>'
-      +_BP_ETAPAS.map(e=>pctCell(P.et[e[0]],P.tot)).join('')
+      +'<td style="'+TD+';text-align:right">'+(tm!==null?_bpFmt1(tm)+' d':'<span style="color:#ccc">—</span>')+'</td>'
+      +'<td style="'+TD+';text-align:right;font-weight:700;color:#1a3c8a">'+_bpFmt2(pmd)+'</td>'
       +'</tr>';
-    // drill-down: lojas do produtivo
-    const lojasArr=Object.entries(P.lojas).sort((a,b)=>b[1].tot-a[1].tot);
-    m+='<tr id="bp_det_'+rid+'" style="display:none"><td colspan="'+(5+_BP_ETAPAS.length)+'" style="padding:0;background:#f5f4f0">'
+
+    // drill-down por produtivo da loja
+    const prodArr=Object.entries(prods).map(([p,rs])=>[p,_bpAgg(rs)]).sort((a,b)=>b[1].qtde-a[1].qtde);
+    m+='<tr id="bp_det_'+rid+'" style="display:none"><td colspan="7" style="padding:0;background:#f5f4f0">'
       +'<div style="position:sticky;left:0;max-width:calc(100vw - 80px);box-sizing:border-box;padding:12px">'
-      +'<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#555;margin-bottom:6px">Lojas — '+prod+'</div>'
-      +'<table style="border-collapse:collapse;font-size:11px;min-width:380px;max-width:560px">'
-      +'<tr style="background:#e0dfd8;font-weight:700"><td style="padding:4px 12px">Loja</td><td style="padding:4px 12px;text-align:right;width:60px">Total</td><td style="padding:4px 12px;text-align:right;width:80px">Concl.</td><td style="padding:4px 12px;text-align:right;width:70px">Pend.</td><td style="padding:4px 12px;text-align:right;width:70px">%</td></tr>'
-      +lojasArr.map(([lj,v],j)=>{const p=_bpPct(v.concl,v.tot);const c=p>=90?'#1a7a4c':(p>=60?'#7a5a00':'#c62828');
+      +'<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#555;margin-bottom:6px">Produtivos — '+loja+'</div>'
+      +'<table style="border-collapse:collapse;font-size:11px;width:100%;max-width:720px">'
+      +'<tr style="background:#e0dfd8;font-weight:700">'
+        +'<td style="padding:4px 12px">Produtivo</td>'
+        +'<td style="padding:4px 12px;text-align:right;width:60px">Qtde</td>'
+        +'<td style="padding:4px 12px;text-align:right;width:80px">Final.</td>'
+        +'<td style="padding:4px 12px;text-align:right;width:70px">Pend.</td>'
+        +'<td style="padding:4px 12px;text-align:right;width:60px">%</td>'
+        +'<td style="padding:4px 12px;text-align:right;width:90px">T. Médio</td>'
+        +'<td style="padding:4px 12px;text-align:right;width:60px">PMD</td></tr>'
+      +prodArr.map(([p,a],j)=>{const pp=_bpPct(a.fin,a.qtde);const cc=pp>=90?'#1a7a4c':(pp>=60?'#7a5a00':'#c62828');
+        const t=a.nDias?a.somaDias/a.nDias:null; const pm=a.qtde/du;
         return '<tr style="background:'+(j%2===0?'#fff':'#f7f6f2')+';border-bottom:1px solid var(--border)">'
-        +'<td style="padding:5px 12px">'+lj+'</td>'
-        +'<td style="padding:5px 12px;text-align:right;font-weight:700">'+_bpFmtN(v.tot)+'</td>'
-        +'<td style="padding:5px 12px;text-align:right;color:#1a7a4c">'+_bpFmtN(v.concl)+'</td>'
-        +'<td style="padding:5px 12px;text-align:right;color:#c62828">'+_bpFmtN(v.tot-v.concl)+'</td>'
-        +'<td style="padding:5px 12px;text-align:right;font-weight:700;color:'+c+'">'+p+'%</td></tr>';}).join('')
+        +'<td style="padding:5px 12px">'+p+'</td>'
+        +'<td style="padding:5px 12px;text-align:right;font-weight:700">'+_bpFmtN(a.qtde)+'</td>'
+        +'<td style="padding:5px 12px;text-align:right;color:#1a7a4c">'+_bpFmtN(a.fin)+'</td>'
+        +'<td style="padding:5px 12px;text-align:right;color:#c62828">'+_bpFmtN(a.pend)+'</td>'
+        +'<td style="padding:5px 12px;text-align:right;font-weight:700;color:'+cc+'">'+pp+'%</td>'
+        +'<td style="padding:5px 12px;text-align:right">'+(t!==null?_bpFmt1(t)+' d':'—')+'</td>'
+        +'<td style="padding:5px 12px;text-align:right;font-weight:700;color:#1a3c8a">'+_bpFmt2(pm)+'</td></tr>';}).join('')
       +'</table></div></td></tr>';
   });
 
   // total geral
-  const etTot={}; _BP_ETAPAS.forEach(e=>etTot[e[0]]=rows.reduce((s,r)=>s+r.et[e[0]],0));
+  const tmG = G.nDias?G.somaDias/G.nDias:null;
   m+='<tr style="background:#111;color:#fff;font-weight:700">'
     +'<td style="'+TD+';position:sticky;left:0;background:#111">Total</td>'
-    +'<td style="'+TD+';text-align:right">'+_bpFmtN(total)+'</td>'
-    +'<td style="'+TD+';text-align:right;border-left:2px solid #444">'+_bpFmtN(concl)+'</td>'
-    +'<td style="'+TD+';text-align:right">'+_bpFmtN(pend)+'</td>'
-    +'<td style="'+TD+';text-align:right">'+_bpPct(concl,total)+'%</td>'
-    +_BP_ETAPAS.map(e=>'<td style="'+TD+';text-align:right">'+_bpFmtN(etTot[e[0]])+' ('+_bpPct(etTot[e[0]],total)+'%)</td>').join('')
-    +'</tr></tbody></table></div>';
+    +'<td style="'+TD+';text-align:right">'+_bpFmtN(G.qtde)+'</td>'
+    +'<td style="'+TD+';text-align:right;border-left:2px solid #444">'+_bpFmtN(G.fin)+'</td>'
+    +'<td style="'+TD+';text-align:right">'+_bpFmtN(G.pend)+'</td>'
+    +'<td style="'+TD+';text-align:right">'+_bpPct(G.fin,G.qtde)+'%</td>'
+    +'<td style="'+TD+';text-align:right">'+(tmG!==null?_bpFmt1(tmG)+' d':'—')+'</td>'
+    +'<td style="'+TD+';text-align:right">'+_bpFmt2(G.qtde/du)+'</td>'
+    +'</tr></tbody></table></div>'
+    +'<div style="font-size:11px;color:var(--muted);margin-top:8px">PMD = Qtde ÷ '+du+' dias úteis · Tempo Médio = dias entre Entrega (I) e Conclusão (U), ignorando registros sem alguma das datas.</div>';
   mtxBox.innerHTML=m;
-
-  // ── Camada 3: Ranking por loja e por estado ──
-  const aggBy = key => {
-    const mm={};
-    rows.forEach(r=>{ const k=r[key]; if(!mm[k])mm[k]={tot:0,concl:0}; mm[k].tot++; mm[k].concl+=r.concl; });
-    return Object.entries(mm).sort((a,b)=>b[1].tot-a[1].tot);
-  };
-  const rank=(titulo,arr,cor)=>{
-    const max=arr.length?arr[0][1].tot:1;
-    return '<div style="flex:1;min-width:340px;border:1px solid var(--border);border-radius:3px;overflow:hidden">'
-      +'<div style="background:#1e1e1e;color:#fff;padding:8px 14px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px">'+titulo+'</div>'
-      +'<table style="width:100%;border-collapse:collapse;font-size:12px">'
-      +'<tr style="background:#e0dfd8;font-weight:700"><td style="padding:4px 12px" colspan="2">Nome</td><td style="padding:4px 12px;text-align:right">Total</td><td style="padding:4px 12px;text-align:right">Concl.</td><td style="padding:4px 12px;text-align:right">%</td></tr>'
-      +arr.map(([n,v],i)=>{const p=_bpPct(v.concl,v.tot);const c=p>=90?'#1a7a4c':(p>=60?'#7a5a00':'#c62828');
-        return '<tr style="background:'+(i%2===0?'#fff':'#fafaf8')+';border-bottom:1px solid var(--border)">'
-        +'<td style="padding:6px 12px;width:26px;text-align:center;font-weight:700;color:#bbb">'+(i+1)+'</td>'
-        +'<td style="padding:6px 12px;font-weight:600">'+n
-          +'<div style="background:#e8e7e0;border-radius:2px;height:4px;width:110px;overflow:hidden;margin-top:3px"><div style="width:'+Math.round(v.tot/max*110)+'px;background:'+cor+';height:100%"></div></div></td>'
-        +'<td style="padding:6px 12px;text-align:right;font-weight:700">'+_bpFmtN(v.tot)+'</td>'
-        +'<td style="padding:6px 12px;text-align:right;color:#1a7a4c">'+_bpFmtN(v.concl)+'</td>'
-        +'<td style="padding:6px 12px;text-align:right;font-weight:700;color:'+c+'">'+p+'%</td></tr>';}).join('')
-      +'</table></div>';
-  };
-  if(rnkBox) rnkBox.innerHTML = rank('Por Loja',aggBy('loja'),'#1a3c8a') + rank('Por Estado',aggBy('regiao'),'#1a7a4c');
 }
 
-function toggleBpProd(rid){
+function toggleBpLoja(rid){
   const det=document.getElementById('bp_det_'+rid);
   const icon=document.getElementById('bp_eb_'+rid);
   if(!det) return;
