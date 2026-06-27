@@ -211,6 +211,9 @@ th:hover .col-rh,.col-rh:hover,.col-rh.rh-drag{opacity:1;background:rgba(255,255
   /* Oficina: blocos do drill-down empilham (não cortam) no celular */
   .of-drill-grid{flex-direction:column;gap:14px}
   .of-drill-mini{min-width:0 !important;max-width:100% !important;width:100% !important;flex:1 1 100% !important}
+  /* Back-Produtivo: mesmo comportamento */
+  .bp-drill-grid{flex-direction:column;gap:14px}
+  .bp-drill-mini{min-width:0 !important;max-width:100% !important;width:100% !important;flex:1 1 100% !important}
 }
 @media (max-width:480px){
   .topbar-title p{display:none}
@@ -729,7 +732,7 @@ let API_OFICINA = 'https://script.google.com/macros/s/AKfycbwzIukMNDvpxtXcsVs8Vc
 try { _lsRm('v1_oficina'); } catch(e){}
 let API_BACKCUSTO = _ls('v1_backcusto', 'https://script.google.com/macros/s/AKfycbyAzcotkcj1pwu_ZnvKN8-lNUjYYyaZmei3yy-fhGxtr8YTZQ7NZSZf5Aa403KO0Mk0/exec');
 // Back Produtivo: URL FIXA embutida (não usa localStorage, para sempre subir certa no GitHub).
-let API_BACKPRODPE = 'https://script.google.com/macros/s/AKfycbwQEGQLxIQ0J709IVHxlviqwZ6wCyL2O33Lb32Zd_KCBLDrDDwEElPxHkSA1ERhg91J3A/exec';
+let API_BACKPRODPE = 'https://script.google.com/macros/s/AKfycbxdDEbBzSq0I9h85KJsdCwtvRymzffs2VQKiWDK3gC6i5a-EH10zyfzl10Rj2lHdjbcWA/exec';
 try { _lsRm('v1_backprodpe'); } catch(e){}
 let store = {geral:[],bace:[],pepb:[]};
 let rawRows = {geral:[],bace:[],pepb:[]};
@@ -5606,9 +5609,21 @@ function loadBackProdSheet(name) {
       regiao: String(r['Regiao']||'').trim().toUpperCase() || '(sem estado)',
       loja:   String(r['Loja']||'').trim() || '(sem loja)',
       prod:   String(r['Produtivo']||'').trim() || '(sem produtivo)',
+      desp:   String(r['Despachante']||'').trim() || '(sem despachante)',
       placa:  String(r['Placa']||'').trim(),
       concl:  +r['Concluido'] ? 1 : 0,
-      dias:   (r['DiasConcl']===null||r['DiasConcl']===undefined||r['DiasConcl']==='') ? null : Number(r['DiasConcl'])
+      cat:    String(r['StatusCat']||'NAO').trim().toUpperCase(),
+      dias:   (r['DiasConcl']===null||r['DiasConcl']===undefined||r['DiasConcl']==='') ? null : Number(r['DiasConcl']),
+      cliente:String(r['Cliente']||'').trim(),
+      status: String(r['Status']||'').trim(),
+      det: {
+        DataFat:String(r['DataFat']||''), DataEntr:String(r['DataEntr']||''),
+        IPVA:String(r['IPVA']||''), Averbacao:String(r['Averbacao']||''),
+        DataEnvDesp:String(r['DataEnvDesp']||''), Emissao:String(r['Emissao']||''),
+        SolicPlaca:String(r['SolicPlaca']||''), ComunicVenda:String(r['ComunicVenda']||''),
+        Cartorio:String(r['Cartorio']||''), Financeira:String(r['Financeira']||''),
+        DataConcl:String(r['DataConcl']||'')
+      }
     })).filter(r => r.loja);
 
     _bpAll.regiao = [...new Set(_bpRows.map(r=>r.regiao))].sort();
@@ -5700,14 +5715,121 @@ function renderBackProdShell() {
   renderBackProdContent();
 }
 
-// Agrega um conjunto de linhas em {qtde, fin, pend, somaDias, nDias}
+// Agrega um conjunto de linhas em {qtde, fin, pend, and, nao, somaDias, nDias}
 function _bpAgg(rows){
-  let qtde=0, fin=0, somaDias=0, nDias=0;
+  let qtde=0, fin=0, andc=0, pen=0, nao=0, somaDias=0, nDias=0;
   rows.forEach(r=>{
     qtde++; fin+=r.concl;
+    if(r.cat==='AND') andc++; else if(r.cat==='PEN') pen++; else if(r.cat==='NAO') nao++;
     if(r.dias!==null && !isNaN(r.dias)){ somaDias+=r.dias; nDias++; }
   });
-  return {qtde:qtde, fin:fin, pend:qtde-fin, somaDias:somaDias, nDias:nDias};
+  return {qtde:qtde, fin:fin, pend:qtde-fin, and:andc, pen:pen, nao:nao, somaDias:somaDias, nDias:nDias};
+}
+
+// Monta uma mini-tabela do drill-down (por produtivo ou por despachante)
+// keyPrefix garante IDs únicos por loja+tipo (ex.: bp_l_0_prod)
+function _bpMiniTable(titulo, label, grupos, du, keyPrefix){
+  const arr=Object.entries(grupos).map(([n,rs])=>[n,_bpAgg(rs),rs]).sort((a,b)=>b[1].qtde-a[1].qtde);
+  const NC=14; // nº de colunas da linha de detalhe (placa)
+  // id do bloco "irmão" (produtivo <-> despachante) para esconder ao expandir uma placa
+  const irmaoId = keyPrefix.indexOf('_prod')!==-1 ? 'bpmini_'+keyPrefix.replace('_prod','_desp')
+                : keyPrefix.indexOf('_desp')!==-1 ? 'bpmini_'+keyPrefix.replace('_desp','_prod') : '';
+  let h='<div class="bp-drill-mini" id="bpmini_'+keyPrefix+'" style="flex:1;min-width:340px">'
+    +'<div style="background:#2a2a2a;color:#fff;padding:6px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px">'+titulo+'</div>'
+    +'<table style="border-collapse:collapse;font-size:11px;width:100%">'
+    +'<tr style="background:#e0dfd8;font-weight:700">'
+      +'<td style="padding:4px 12px">'+label+'</td>'
+      +'<td style="padding:4px 12px;text-align:right;width:50px">Qtde</td>'
+      +'<td style="padding:4px 12px;text-align:right;width:55px">Final.</td>'
+      +'<td style="padding:4px 12px;text-align:right;width:55px">Em and.</td>'
+      +'<td style="padding:4px 12px;text-align:right;width:50px">Pend.</td>'
+      +'<td style="padding:4px 12px;text-align:right;width:55px">Não in.</td>'
+      +'<td style="padding:4px 12px;text-align:right;width:65px">Pendentes</td>'
+      +'<td style="padding:4px 12px;text-align:right;width:50px">%</td>'
+      +'<td style="padding:4px 12px;text-align:right;width:80px">T. Médio</td>'
+      +'<td style="padding:4px 12px;text-align:right;width:55px">PMD</td></tr>';
+  arr.forEach(([n,a,rs],j)=>{
+    const pp=_bpPct(a.fin,a.qtde);const cc=pp>=90?'#1a7a4c':(pp>=60?'#7a5a00':'#c62828');
+    const t=a.nDias?a.somaDias/a.nDias:null; const pm=a.qtde/du;
+    const gid=keyPrefix+'_'+j;
+    h+='<tr style="background:'+(j%2===0?'#fff':'#f7f6f2')+';border-bottom:1px solid var(--border);cursor:pointer" onclick="toggleBpGrupo(\''+gid+'\',\''+irmaoId+'\')">'
+      +'<td style="padding:5px 12px"><span id="bpg_eb_'+gid+'" style="font-size:10px;color:#888;margin-right:5px">⊞</span>'+n+'</td>'
+      +'<td style="padding:5px 12px;text-align:right;font-weight:700">'+_bpFmtN(a.qtde)+'</td>'
+      +'<td style="padding:5px 12px;text-align:right;color:#1a7a4c">'+_bpFmtN(a.fin)+'</td>'
+      +'<td style="padding:5px 12px;text-align:right;color:#1565c0">'+_bpFmtN(a.and)+'</td>'
+      +'<td style="padding:5px 12px;text-align:right;color:#c8921a">'+_bpFmtN(a.pen)+'</td>'
+      +'<td style="padding:5px 12px;text-align:right;color:#999">'+_bpFmtN(a.nao)+'</td>'
+      +'<td style="padding:5px 12px;text-align:right;color:#c62828">'+_bpFmtN(a.pend)+'</td>'
+      +'<td style="padding:5px 12px;text-align:right;font-weight:700;color:'+cc+'">'+pp+'%</td>'
+      +'<td style="padding:5px 12px;text-align:right">'+(t!==null?_bpFmt1(t)+' d':'—')+'</td>'
+      +'<td style="padding:5px 12px;text-align:right;font-weight:700;color:#1a3c8a">'+_bpFmt2(pm)+'</td></tr>';
+    // linha de detalhe: tabela de placas
+    h+='<tr id="bpg_det_'+gid+'" style="display:none"><td colspan="10" style="padding:0;background:#eceae3">'
+      +'<div style="overflow-x:auto;padding:8px 12px">'+_bpPlacasTable(rs)+'</div>'
+      +'</td></tr>';
+  });
+  h+='</table></div>';
+  return h;
+}
+
+// Tabela de placas (colunas escolhidas pela usuária)
+function _bpPlacasTable(rs){
+  const esc = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const cols=[
+    ['Placa', r=>r.placa],
+    ['Produtivo', r=>r.prod],
+    ['Cliente', r=>r.cliente],
+    ['Data Fat.', r=>r.det.DataFat],
+    ['Data Entrega', r=>r.det.DataEntr],
+    ['Status', r=>r.status],
+    ['IPVA', r=>r.det.IPVA],
+    ['Averbação', r=>r.det.Averbacao],
+    ['Despachante', r=>r.desp],
+    ['Envio Desp.', r=>r.det.DataEnvDesp],
+    ['Emissão', r=>r.det.Emissao],
+    ['Solic. Placa', r=>r.det.SolicPlaca],
+    ['Com. Venda', r=>r.det.ComunicVenda],
+    ['Cartório', r=>r.det.Cartorio],
+    ['Financeira', r=>r.det.Financeira],
+    ['Data Concl.', r=>r.det.DataConcl]
+  ];
+  let h='<table style="border-collapse:collapse;font-size:10px;background:#fff;min-width:1100px">'
+    +'<tr style="background:#3a3a3a;color:#fff">'
+    +cols.map(c=>'<td style="padding:4px 8px;white-space:nowrap;font-weight:700">'+c[0]+'</td>').join('')
+    +'</tr>';
+  rs.forEach((r,i)=>{
+    h+='<tr style="background:'+(i%2===0?'#fff':'#f5f4ef')+';border-bottom:1px solid #e5e3da">'
+      +cols.map(c=>'<td style="padding:4px 8px;white-space:nowrap">'+esc(c[1](r))+'</td>').join('')
+      +'</tr>';
+  });
+  h+='</table>';
+  return h;
+}
+
+function toggleBpGrupo(gid, irmaoId){
+  const det=document.getElementById('bpg_det_'+gid);
+  const icon=document.getElementById('bpg_eb_'+gid);
+  if(!det) return;
+  const open=det.style.display==='none'||det.style.display==='';
+  det.style.display=open?'table-row':'none';
+  if(icon) icon.textContent=open?'⊟':'⊞';
+
+  // bloco atual (este mini) e bloco irmão
+  const meuMini = det.closest('.bp-drill-mini');
+  const irmao = irmaoId ? document.getElementById(irmaoId) : null;
+
+  // há alguma placa aberta dentro deste bloco?
+  const algumAberto = meuMini && meuMini.querySelector('tr[id^="bpg_det_"][style*="table-row"]');
+
+  if(irmao){
+    if(algumAberto){
+      irmao.style.display='none';                 // esconde o irmão
+      if(meuMini){ meuMini.style.flex='1 1 100%'; meuMini.style.maxWidth='100%'; }
+    } else {
+      irmao.style.display='';                      // volta o irmão
+      if(meuMini){ meuMini.style.flex='1'; meuMini.style.maxWidth=''; }
+    }
+  }
 }
 
 function renderBackProdContent() {
@@ -5734,22 +5856,26 @@ function renderBackProdContent() {
     +'<p style="font-size:20px;font-weight:700;margin:0">'+v+'</p></div>';
   if(kpiBox) kpiBox.innerHTML =
     kpi('Total Processos', _bpFmtN(G.qtde),                       '#1a3c8a','Total de placas (todas as linhas)')+
-    kpi('Finalizados',     _bpFmtN(G.fin),                        '#1a7a4c','Status (coluna J) = OK ou FINALIZADO')+
-    kpi('Pendentes',       _bpFmtN(G.pend),                       '#c62828')+
-    kpi('% Conclusão',     _bpPct(G.fin,G.qtde)+'%',              '#7a5a00')+
+    kpi('Finalizados',     _bpFmtN(G.fin),                        '#1a7a4c','Status (J) = Finalizado')+
+    kpi('Em andamento',    _bpFmtN(G.and),                        '#1565c0','Status (J) = Em andamento')+
+    kpi('Pendente',        _bpFmtN(G.pen),                        '#c8921a','Status (J) = Pendente')+
+    kpi('Não iniciada',    _bpFmtN(G.nao),                        '#777','Status (J) vazio com placa, ou "Não iniciada"')+
+    kpi('% Conclusão',     _bpPct(G.fin,G.qtde)+'%',              '#7a5a00','Finalizados ÷ total')+
     kpi('Tempo Médio',     tmGeral!==null?_bpFmt1(tmGeral)+' dias':'—', '#6a1a7a','Média de dias entre Entrega (I) e Conclusão (U); ignora linhas sem data')+
     kpi('Produtivos',      _bpFmtN(prodAtivos),                   '#1a6a7a');
 
   // ── Agrega por LOJA (com sub-agregação por produtivo p/ drill-down) ──
   const porLoja = {};
   rows.forEach(r=>{
-    if(!porLoja[r.loja]) porLoja[r.loja]={rows:[], prods:{}};
+    if(!porLoja[r.loja]) porLoja[r.loja]={rows:[], prods:{}, desps:{}};
     porLoja[r.loja].rows.push(r);
     if(!porLoja[r.loja].prods[r.prod]) porLoja[r.loja].prods[r.prod]=[];
     porLoja[r.loja].prods[r.prod].push(r);
+    if(!porLoja[r.loja].desps[r.desp]) porLoja[r.loja].desps[r.desp]=[];
+    porLoja[r.loja].desps[r.desp].push(r);
   });
   const lojas = Object.entries(porLoja)
-    .map(([loja,o])=>[loja, _bpAgg(o.rows), o.prods])
+    .map(([loja,o])=>[loja, _bpAgg(o.rows), o.prods, o.desps])
     .sort((a,b)=>b[1].qtde-a[1].qtde);
 
   const BH='background:#1a2a48;color:#fff;padding:8px 10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap';
@@ -5761,13 +5887,16 @@ function renderBackProdContent() {
     +'<th style="'+BH+';text-align:left;position:sticky;left:0;background:#1a2a48;z-index:1">Loja</th>'
     +'<th style="'+BH+';text-align:right">Qtde</th>'
     +'<th style="'+BH+';text-align:right;border-left:2px solid #2a5a8a">Finalizados</th>'
+    +'<th style="'+BH+';text-align:right">Em and.</th>'
+    +'<th style="'+BH+';text-align:right">Pendente</th>'
+    +'<th style="'+BH+';text-align:right">Não inic.</th>'
     +'<th style="'+BH+';text-align:right">Pendentes</th>'
     +'<th style="'+BH+';text-align:right">% Concl.</th>'
     +'<th style="'+BH+';text-align:right" title="Média de dias entre Entrega e Conclusão">Tempo Médio</th>'
     +'<th style="'+BH+';text-align:right" title="Passagem Média Dia = Qtde ÷ dias úteis">PMD</th>'
     +'</tr></thead><tbody>';
 
-  lojas.forEach(([loja,A,prods],i)=>{
+  lojas.forEach(([loja,A,prods,desps],i)=>{
     const rid='bp_l_'+i;
     const pc=_bpPct(A.fin,A.qtde); const corpc=pc>=90?'#1a7a4c':(pc>=60?'#7a5a00':'#c62828');
     const tm=A.nDias?A.somaDias/A.nDias:null;
@@ -5776,37 +5905,22 @@ function renderBackProdContent() {
       +'<td style="'+TD+';font-weight:600;position:sticky;left:0;background:inherit"><span id="bp_eb_'+rid+'" style="font-size:11px;color:#888;margin-right:6px">⊞</span>'+loja+'</td>'
       +'<td style="'+TD+';text-align:right;font-weight:700">'+_bpFmtN(A.qtde)+'</td>'
       +'<td style="'+TD+';text-align:right;color:#1a7a4c;font-weight:700;border-left:2px solid var(--border)">'+_bpFmtN(A.fin)+'</td>'
+      +'<td style="'+TD+';text-align:right;color:#1565c0">'+_bpFmtN(A.and)+'</td>'
+      +'<td style="'+TD+';text-align:right;color:#c8921a">'+_bpFmtN(A.pen)+'</td>'
+      +'<td style="'+TD+';text-align:right;color:#999">'+_bpFmtN(A.nao)+'</td>'
       +'<td style="'+TD+';text-align:right;color:#c62828;font-weight:700">'+_bpFmtN(A.pend)+'</td>'
       +'<td style="'+TD+';text-align:right;font-weight:700;color:'+corpc+'">'+pc+'%</td>'
       +'<td style="'+TD+';text-align:right">'+(tm!==null?_bpFmt1(tm)+' d':'<span style="color:#ccc">—</span>')+'</td>'
       +'<td style="'+TD+';text-align:right;font-weight:700;color:#1a3c8a">'+_bpFmt2(pmd)+'</td>'
       +'</tr>';
 
-    // drill-down por produtivo da loja
-    const prodArr=Object.entries(prods).map(([p,rs])=>[p,_bpAgg(rs)]).sort((a,b)=>b[1].qtde-a[1].qtde);
-    m+='<tr id="bp_det_'+rid+'" style="display:none"><td colspan="7" style="padding:0;background:#f5f4f0">'
+    // drill-down: produtivos + despachantes lado a lado
+    m+='<tr id="bp_det_'+rid+'" style="display:none"><td colspan="10" style="padding:0;background:#f5f4f0">'
       +'<div style="position:sticky;left:0;max-width:calc(100vw - 80px);box-sizing:border-box;padding:12px">'
-      +'<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#555;margin-bottom:6px">Produtivos — '+loja+'</div>'
-      +'<table style="border-collapse:collapse;font-size:11px;width:100%;max-width:720px">'
-      +'<tr style="background:#e0dfd8;font-weight:700">'
-        +'<td style="padding:4px 12px">Produtivo</td>'
-        +'<td style="padding:4px 12px;text-align:right;width:60px">Qtde</td>'
-        +'<td style="padding:4px 12px;text-align:right;width:80px">Final.</td>'
-        +'<td style="padding:4px 12px;text-align:right;width:70px">Pend.</td>'
-        +'<td style="padding:4px 12px;text-align:right;width:60px">%</td>'
-        +'<td style="padding:4px 12px;text-align:right;width:90px">T. Médio</td>'
-        +'<td style="padding:4px 12px;text-align:right;width:60px">PMD</td></tr>'
-      +prodArr.map(([p,a],j)=>{const pp=_bpPct(a.fin,a.qtde);const cc=pp>=90?'#1a7a4c':(pp>=60?'#7a5a00':'#c62828');
-        const t=a.nDias?a.somaDias/a.nDias:null; const pm=a.qtde/du;
-        return '<tr style="background:'+(j%2===0?'#fff':'#f7f6f2')+';border-bottom:1px solid var(--border)">'
-        +'<td style="padding:5px 12px">'+p+'</td>'
-        +'<td style="padding:5px 12px;text-align:right;font-weight:700">'+_bpFmtN(a.qtde)+'</td>'
-        +'<td style="padding:5px 12px;text-align:right;color:#1a7a4c">'+_bpFmtN(a.fin)+'</td>'
-        +'<td style="padding:5px 12px;text-align:right;color:#c62828">'+_bpFmtN(a.pend)+'</td>'
-        +'<td style="padding:5px 12px;text-align:right;font-weight:700;color:'+cc+'">'+pp+'%</td>'
-        +'<td style="padding:5px 12px;text-align:right">'+(t!==null?_bpFmt1(t)+' d':'—')+'</td>'
-        +'<td style="padding:5px 12px;text-align:right;font-weight:700;color:#1a3c8a">'+_bpFmt2(pm)+'</td></tr>';}).join('')
-      +'</table></div></td></tr>';
+      +'<div class="bp-drill-grid" style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start">'
+      +_bpMiniTable('Produtivos — '+loja, 'Produtivo', prods, du, rid+'_prod')
+      +_bpMiniTable('Despachantes — '+loja, 'Despachante', desps, du, rid+'_desp')
+      +'</div></div></td></tr>';
   });
 
   // total geral
@@ -5815,6 +5929,9 @@ function renderBackProdContent() {
     +'<td style="'+TD+';position:sticky;left:0;background:#111">Total</td>'
     +'<td style="'+TD+';text-align:right">'+_bpFmtN(G.qtde)+'</td>'
     +'<td style="'+TD+';text-align:right;border-left:2px solid #444">'+_bpFmtN(G.fin)+'</td>'
+    +'<td style="'+TD+';text-align:right">'+_bpFmtN(G.and)+'</td>'
+    +'<td style="'+TD+';text-align:right">'+_bpFmtN(G.pen)+'</td>'
+    +'<td style="'+TD+';text-align:right">'+_bpFmtN(G.nao)+'</td>'
     +'<td style="'+TD+';text-align:right">'+_bpFmtN(G.pend)+'</td>'
     +'<td style="'+TD+';text-align:right">'+_bpPct(G.fin,G.qtde)+'%</td>'
     +'<td style="'+TD+';text-align:right">'+(tmG!==null?_bpFmt1(tmG)+' d':'—')+'</td>'
