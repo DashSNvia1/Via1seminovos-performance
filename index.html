@@ -2762,6 +2762,65 @@ function buildGiroTab(regionId, rows, name, lojaFilter) {
   buildGiroContent(giroDiv, rows, name);
 }
 
+// Cabeçalho clicável da tabela de Giro (ciclo: desc → asc → padrão)
+function _giroTh(col, label, align){
+  return '<th onclick="sortGiro(\''+col+'\')" style="background:#2a2a2a;color:#fff;padding:8px 12px;text-align:'+align+';font-size:10px;text-transform:uppercase;cursor:pointer;user-select:none;white-space:nowrap" title="Ordenar"><span id="giroArrow_'+col+'"></span> '+label+' <span style="opacity:.5;font-size:8px">▲▼</span></th>';
+}
+
+// HTML das linhas a partir de uma lista de modelos
+function _giroRowsHtml(modelos){
+  const fmtN = v => (v||0).toLocaleString('pt-BR',{maximumFractionDigits:1});
+  const fmtP = v => ((v||0)*100).toFixed(2)+'%';
+  const pCol = v => v>=0.07?'var(--green)':v>=0.04?'var(--amber)':'var(--red)';
+  const diasCol = v => v<30?'var(--green)':v<60?'var(--blue)':v<90?'var(--amber)':'var(--red)';
+  const diasBadge = v => '<span style="font-weight:700;color:'+diasCol(v)+'">'+fmtN(v)+' dias</span>';
+  return modelos.map((m,i)=>'<tr style="background:'+(i%2===0?'#fafaf8':'#fff')+';border-bottom:1px solid var(--border)">'
+    +'<td style="padding:7px 12px;text-align:center;font-weight:700;color:#bbb">'+(i+1)+'</td>'
+    +'<td style="padding:7px 12px;font-weight:600">'+m.familia+'</td>'
+    +'<td style="padding:7px 12px;text-align:center;font-weight:700">'+m.qtd+'</td>'
+    +'<td style="padding:7px 12px;text-align:center">'+diasBadge(m.mediaDias)+'</td>'
+    +'<td style="padding:7px 12px;text-align:center;color:var(--green)">'+fmtN(m.minDias)+' dias</td>'
+    +'<td style="padding:7px 12px;text-align:center;color:'+diasCol(m.maxDias)+'">'+fmtN(m.maxDias)+' dias</td>'
+    +'<td style="padding:7px 12px;text-align:center;color:'+pCol(m.pctMrg)+';font-weight:700">'+fmtP(m.pctMrg)+'</td>'
+    +'<td style="padding:7px 12px;text-align:center"><span style="padding:2px 10px;border-radius:20px;font-size:11px;font-weight:600;background:'+(m.mediaDias<30?'#e8f5ee':m.mediaDias<60?'#e8f0fd':m.mediaDias<90?'#fdf5e0':'#fce8e8')+';color:'+diasCol(m.mediaDias)+'">'+(m.mediaDias<30?'Rápido':m.mediaDias<60?'Normal':m.mediaDias<90?'Lento':'Crítico')+'</span></td>'
+    +'</tr>').join('');
+}
+
+// Ordena a tabela de Giro da região visível
+function sortGiro(col){
+  // região visível
+  let regId='geral';
+  ['geral','bace','pepb'].forEach(t=>{ const el=document.getElementById('giro-tab-'+t); if(el && el.style.display!=='none') regId=t; });
+  const modelos=(window._giroModelos||{})[regId]; if(!modelos) return;
+  window._giroSort = window._giroSort || {};
+  const st = window._giroSort[regId] || {col:null,dir:null};
+  // ciclo: desc → asc → padrão (reset por mediaDias asc)
+  let dir;
+  if(st.col!==col) dir='desc';
+  else if(st.dir==='desc') dir='asc';
+  else if(st.dir==='asc') dir=null;
+  else dir='desc';
+  window._giroSort[regId] = {col:dir?col:null, dir:dir};
+
+  let ordenados;
+  if(!dir){
+    ordenados=[...modelos].sort((a,b)=>a.mediaDias-b.mediaDias); // padrão
+  } else {
+    ordenados=[...modelos].sort((a,b)=>{
+      let va=a[col], vb=b[col];
+      if(col==='familia'){ va=String(va).toUpperCase(); vb=String(vb).toUpperCase(); return dir==='asc'?(va<vb?-1:va>vb?1:0):(va>vb?-1:va<vb?1:0); }
+      return dir==='asc'?(va-vb):(vb-va);
+    });
+  }
+  const tb=document.getElementById('giro-tbody-'+regId);
+  if(tb) tb.innerHTML=_giroRowsHtml(ordenados);
+  // atualiza setas
+  ['familia','qtd','mediaDias','minDias','maxDias','pctMrg'].forEach(c=>{
+    const ar=document.getElementById('giroArrow_'+c);
+    if(ar) ar.textContent = (dir && c===col) ? (dir==='asc'?'▲':'▼') : '';
+  });
+}
+
 function buildGiroContent(target, rows, name) {
   const body = target;
   const fmtN = v => (v||0).toLocaleString('pt-BR',{maximumFractionDigits:1});
@@ -2788,6 +2847,12 @@ function buildGiroContent(target, rows, name) {
     maxDias: d.maxDias,
     score: d.count?d.diasSum/d.count:0 // lower = faster giro
   })).sort((a,b)=>a.mediaDias-b.mediaDias);
+
+  // guarda para ordenação clicável (por região)
+  const _regId = target.id.replace('giro-body-','');
+  window._giroModelos = window._giroModelos || {};
+  window._giroModelos[_regId] = modelos;
+  window._giroSort = window._giroSort || {};
 
   const totalQtd=modelos.reduce((s,r)=>s+r.qtd,0);
   const globalMedia=rows.length?rows.reduce((s,r)=>s+r.dias,0)/rows.length:0;
@@ -2869,29 +2934,16 @@ function buildGiroContent(target, rows, name) {
     <table style="width:100%;border-collapse:collapse;font-size:12px">
       <thead><tr>
         <th style="background:#2a2a2a;color:#fff;padding:8px 12px;text-align:center;font-size:10px;text-transform:uppercase;width:40px">#</th>
-        <th style="background:#2a2a2a;color:#fff;padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase">Modelo</th>
-        <th style="background:#2a2a2a;color:#fff;padding:8px 12px;text-align:center;font-size:10px;text-transform:uppercase">Qtd. Vendas</th>
-        <th style="background:#2a2a2a;color:#fff;padding:8px 12px;text-align:center;font-size:10px;text-transform:uppercase">Média Dias</th>
-        <th style="background:#2a2a2a;color:#fff;padding:8px 12px;text-align:center;font-size:10px;text-transform:uppercase">Min Dias</th>
-        <th style="background:#2a2a2a;color:#fff;padding:8px 12px;text-align:center;font-size:10px;text-transform:uppercase">Max Dias</th>
-        <th style="background:#2a2a2a;color:#fff;padding:8px 12px;text-align:center;font-size:10px;text-transform:uppercase">% Margem</th>
+        ${_giroTh('familia','Modelo','left')}
+        ${_giroTh('qtd','Qtd. Vendas','center')}
+        ${_giroTh('mediaDias','Média Dias','center')}
+        ${_giroTh('minDias','Min Dias','center')}
+        ${_giroTh('maxDias','Max Dias','center')}
+        ${_giroTh('pctMrg','% Margem','center')}
         <th style="background:#2a2a2a;color:#fff;padding:8px 12px;text-align:center;font-size:10px;text-transform:uppercase">Classificação</th>
       </tr></thead>
-      <tbody>
-        ${modelos.map((m,i)=>`<tr style="background:${i%2===0?'#fafaf8':'#fff'};border-bottom:1px solid var(--border)">
-          <td style="padding:7px 12px;text-align:center;font-weight:700;color:#bbb">${i+1}</td>
-          <td style="padding:7px 12px;font-weight:600">${m.familia}</td>
-          <td style="padding:7px 12px;text-align:center;font-weight:700">${m.qtd}</td>
-          <td style="padding:7px 12px;text-align:center">${diasBadge(m.mediaDias)}</td>
-          <td style="padding:7px 12px;text-align:center;color:var(--green)">${fmtN(m.minDias)} dias</td>
-          <td style="padding:7px 12px;text-align:center;color:${diasCol(m.maxDias)}">${fmtN(m.maxDias)} dias</td>
-          <td style="padding:7px 12px;text-align:center;color:${pCol(m.pctMrg)};font-weight:700">${fmtP(m.pctMrg)}</td>
-          <td style="padding:7px 12px;text-align:center">
-            <span style="padding:2px 10px;border-radius:20px;font-size:11px;font-weight:600;background:${m.mediaDias<30?'#e8f5ee':m.mediaDias<60?'#e8f0fd':m.mediaDias<90?'#fdf5e0':'#fce8e8'};color:${diasCol(m.mediaDias)}">
-              ${m.mediaDias<30?'Rápido':m.mediaDias<60?'Normal':m.mediaDias<90?'Lento':'Crítico'}
-            </span>
-          </td>
-        </tr>`).join('')}
+      <tbody id="giro-tbody-${target.id.replace('giro-body-','')}">
+        ${_giroRowsHtml(modelos)}
       </tbody>
     </table>
   </div>`;
