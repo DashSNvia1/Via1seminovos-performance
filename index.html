@@ -1016,6 +1016,8 @@ async function loadSheet(name) {
     document.getElementById('contentVendas').style.display='block';
     document.getElementById('loadingVendas').style.display='none';
     showTab('geral',false);
+    // Cruza com o estoque do mesmo mês (assíncrono; preenche a coluna "Em Estoque")
+    loadEstoqueForVendas(name);
     // Atualiza Top 10 se a aba estiver visível
     if(document.getElementById('pageVendaTop10')?.style.display==='block') initVendaTop10Page();
   } catch(e) {
@@ -1039,10 +1041,27 @@ function aggregate(rows) {
 }
 
 function extractFamily(m) {
-  let s=String(m).toUpperCase().trim().replace(/^(RENAULT\s*\/?\s*|FIAT\s*\/?\s*|JEEP\s*\/?\s*|I\/)/,'').trim();
-  const p=s.split(/\s+/);
+  let s = String(m).toUpperCase().trim();
+  if(!s) return m;
+  const MAKERS = '(FORD|RENAULT|FIAT|JEEP|CHEVROLET|CHEV|GM|VOLKSWAGEN|VW|NISSAN|TOYOTA|HYUNDAI|HONDA|BYD|YAMAHA|PEUGEOT|CITROEN|CITROËN|MITSUBISHI|KIA|CAOA|CHERY|AUDI|BMW|MERCEDES|VOLVO)';
+  // 1. Formato "CÓDIGO - I/MARCA MODELO ...": usa a parte após o primeiro " - "
+  const di = s.indexOf(' - ');
+  if(di !== -1){
+    const before = s.slice(0,di);
+    const after  = s.slice(di+3).trim();
+    // "before" é um código se tiver dígito, ou for um token único seguido de I/ ou marca
+    const codedBefore = /\d/.test(before) || (!before.includes(' ') && new RegExp('^(I\\s*\\/|'+MAKERS+')').test(after));
+    if(codedBefore && after) s = after;
+  }
+  // 2. Remove indicador de importado "I/"
+  s = s.replace(/^I\s*\//,'').trim();
+  // 3. Remove a marca no início (separada por espaço ou barra)
+  s = s.replace(new RegExp('^'+MAKERS+'[\\s\\/]+'),'').trim();
+  // 3b. Remove a marca COLADA ao modelo (ex.: FORDTERRITORY -> TERRITORY), só se sobrar 3+ letras
+  s = s.replace(new RegExp('^'+MAKERS+'(?=[A-Z]{3,})'),'').trim();
+  const p = s.split(/\s+/).filter(Boolean);
   if(!p.length) return m;
-  if((p[0]==='T'||p[0]==='T-')&&p[1]) return 'T-CROSS';
+  if((p[0]==='T'||p[0]==='T-') && p[1]) return 'T-CROSS';
   return p[0];
 }
 function toNum(v){const n=parseFloat(v);return isNaN(n)?0:n;}
@@ -1081,6 +1100,65 @@ function showTab(id,kpi=true) {
   if(id==='aging') renderAging();
 }
 
+// ── ESTOQUE CRUZADO NA TABELA DE VENDAS ──────────────────────────────────────
+const _MESES_BP=['JANEIRO','FEVEREIRO','MARÇO','MARCO','ABRIL','MAIO','JUNHO','JULHO','AGOSTO','SETEMBRO','OUTUBRO','NOVEMBRO','DEZEMBRO'];
+
+// Conta estoque (finalidade casada com a aba de vendas) por família, respeitando
+// o filtro de Operação (lojas) e a regional (geral/bace/pepb).
+function _vendaEstoqueCount(familia, regionId){
+  const rows = window._estoqueStockRows;
+  if(rows===null || rows===undefined) return null; // ainda carregando
+  const sel = window._vendaSelectedLojas;
+  const fin = window._vendaFinalidade || 'SHOWROOM';
+  let n=0;
+  for(let i=0;i<rows.length;i++){
+    const r=rows[i];
+    if(r.familia!==familia) continue;
+    if(r.finalidade!==fin) continue;
+    if(sel && sel.size>0 && !sel.has(r.loja)) continue;      // filtro Operação
+    if(regionId==='bace' && !BA_CE.includes(r.loja)) continue; // regional
+    if(regionId==='pepb' && !PE_PB.includes(r.loja)) continue;
+    n++;
+  }
+  return n;
+}
+
+// Busca a aba de Estoque do mesmo mês da aba de Vendas e guarda as linhas
+async function loadEstoqueForVendas(vendasSheet){
+  window._estoqueStockRows = null; // reset → coluna mostra "…"
+  if(!API_ESTOQUE){ window._estoqueStockRows=[]; return; }
+  const su = String(vendasSheet||'').toUpperCase();
+  window._vendaFinalidade = su.includes('REPASSE') ? 'REPASSE' : 'SHOWROOM';
+  const norm = s => String(s).toUpperCase().replace(/Ç/g,'C').replace(/[ÃÂÁÀ]/g,'A').replace(/[ÕÔÓÒ]/g,'O');
+  const mes = _MESES_BP.find(m => norm(su).includes(norm(m)));
+  const anoM = su.match(/\b(\d{2})\b/); const ano = anoM ? anoM[1] : '';
+  try{
+    const sd = await jsonp(API_ESTOQUE, {sheet:'__sheets__'});
+    const sheets = sd.sheets || [];
+    let alvo = sheets.find(s => { const sn=norm(s); return mes && sn.includes(norm(mes)) && (!ano || sn.includes(ano)); })
+            || sheets.find(s => { const sn=norm(s); return mes && sn.includes(norm(mes)); });
+    if(!alvo){ window._estoqueStockRows=[]; _refreshVendasEstoque(); return; }
+    const data = await jsonp(API_ESTOQUE, {sheet:alvo});
+    if(data.error){ window._estoqueStockRows=[]; _refreshVendasEstoque(); return; }
+    const ecol = data.estoqueCol || (data.headers && data.headers[31]) || 'ESTOQUE';
+    window._estoqueStockRows = (data.rows||[]).map(r=>{
+      const modelo=String(r['MODELO']||r['Modelo']||r['modelo']||'').trim();
+      const loja=String(r['EMPRESA']||r['Empresa']||r['LOJA']||r['Loja']||r['loja']||'').trim().toUpperCase();
+      const tipo=String(r[ecol]||'').trim();
+      const finalidade=SHOWROOM_TIPOS.some(t=>tipo.includes(t.split(' ')[0]))?'SHOWROOM':REPASSE_TIPOS.some(t=>tipo.includes('REPASSE'))?'REPASSE':'OUTRO';
+      return {familia:extractFamily(modelo), loja, finalidade};
+    }).filter(r=>r.familia);
+    window._estoqueStockSheet = alvo;
+  }catch(e){ window._estoqueStockRows=[]; }
+  _refreshVendasEstoque();
+}
+
+function _refreshVendasEstoque(){
+  if(typeof renderVendasTable==='function'){
+    ['geral','bace','pepb'].forEach(t=>{ if(store[t]&&store[t].length) renderVendasTable(t); });
+  }
+}
+
 function renderVendasTable(id) {
   const tbl=document.getElementById('tbl-'+id);
   const data=store[id]; if(!data.length){tbl.innerHTML='<tr><td class="no-data">Sem dados</td></tr>';return;}
@@ -1094,6 +1172,7 @@ function renderVendasTable(id) {
     {k:null,l:'#',cl:'c',w:40},
     {k:'familia',l:'Modelo',cl:''},
     {k:'vendas',l:'Volume',cl:'r'},
+    {k:'estoque',l:'Em Estoque',cl:'r'},
     {k:'dias',l:'Média Dias',cl:'r'},
     {k:'tkm',l:'TKM Médio',cl:'r'},
     {k:'margemRS',l:'Margem R$',cl:'r'},
@@ -1102,7 +1181,7 @@ function renderVendasTable(id) {
     {k:'fipe',l:'% Venda FIPE',cl:'c'},
   ];
   // Aplica ordem salva (exceto a coluna # que é sempre a primeira)
-  const COL_VER='v3'; // incremente ao adicionar/remover colunas
+  const COL_VER='v4'; // incremente ao adicionar/remover colunas
   const savedMain=_ls('v1_colOrder_main',null);
   const savedMainVer=_ls('v1_colOrder_main_ver',null);
   let orderedCols=[cols[0]]; // # sempre primeiro
@@ -1143,6 +1222,7 @@ function renderVendasTable(id) {
       if(!c.k) return `<td class="ctr"><span class="exp-btn" id="eb_${did}" onclick="toggleDetail('${did}',${i},'${id}')">⊞</span> <span class="rank ${rc}">${rank}</span></td>`;
       if(c.k==='familia') return `<td class="model-cell">${fam}</td>`;
       if(c.k==='vendas')  return `<td class="num"><div class="vol-wrap"><div class="vol-bg"><div class="vol-bar" style="width:${bw}px"></div></div>${row.vendas}</div></td>`;
+      if(c.k==='estoque') { const st=_vendaEstoqueCount(row.familia,id); return `<td class="num">${st===null?'<span style="color:#ccc">…</span>':(st>0?'<b>'+st+'</b>':'<span style="color:#ccc">0</span>')}</td>`; }
       if(c.k==='tkm')     return `<td class="num">${row.tkm>0?'R$ '+Math.round(row.tkm).toLocaleString('pt-BR'):'—'}</td>`;
       if(c.k==='margem')  return `<td class="ctr">${bMargem(row.margem)}</td>`;
       if(c.k==='margemRS') return `<td class="num">R$ ${Math.round(row.margemRS).toLocaleString('pt-BR')}</td>`;
@@ -1170,7 +1250,7 @@ function colDrop(e,type,targetIdx,tableId){
   e.preventDefault();
   if(_dragColType!==type || _dragColIdx===targetIdx) return;
   const storageKey = type==='main'?'v1_colOrder_main':'v1_colOrder_detail';
-  const allMain=['familia','vendas','dias','tkm','margemRS','margem','pago','fipe'];
+  const allMain=['familia','vendas','estoque','dias','tkm','margemRS','margem','pago','fipe'];
   const allDet=['placa','modelo','loja','ano','km','diasEstoque','margem','margemRS','pago','fipe','totalRecebido'];
   const allKeys = type==='main'?allMain:allDet;
   let order;
