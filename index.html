@@ -317,6 +317,15 @@ th:hover .col-rh,.col-rh:hover,.col-rh.rh-drag{opacity:1;background:rgba(255,255
       </div>
       <div class="config-status" id="st-backprodpe"></div>
     </div>
+    <div>
+      <div class="config-box-title">🚗 Avaliações</div>
+      <div class="config-row">
+        <input class="config-input" id="apiUrl8" type="text" placeholder="https://script.google.com/...">
+        <button class="btn-save" onclick="saveURL('aval2')">Salvar</button>
+        <button class="btn-clear" onclick="clearURL('aval2')">✕</button>
+      </div>
+      <div class="config-status" id="st-aval2"></div>
+    </div>
   </div>
   <div class="config-hint">
     Cole a URL do Web App do Apps Script em cada campo e clique Salvar. As URLs ficam salvas no navegador.
@@ -566,6 +575,12 @@ th:hover .col-rh,.col-rh:hover,.col-rh.rh-drag{opacity:1;background:rgba(255,255
   </div>
 </div>
 
+<div id="pageAval2" style="display:none">
+  <div style="padding:16px 20px 60px" id="aval2-body">
+    <div style="padding:2rem;color:var(--muted)">Configure a URL da API <b>Avaliações</b> nas configurações (⚙) para carregar esta aba.</div>
+  </div>
+</div>
+
 <div id="pageOficina" style="display:none">
   <div style="background:#fff;border-bottom:1px solid var(--border);padding:6px 20px;display:flex;align-items:center;gap:8px">
     <span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Aba:</span>
@@ -598,6 +613,7 @@ th:hover .col-rh,.col-rh:hover,.col-rh.rh-drag{opacity:1;background:rgba(255,255
   <div class="ptab" id="ptOficina" data-page="oficina" draggable="true">Oficina</div>
   <div class="ptab" id="ptBackCusto" data-page="back-custo" draggable="true">Back - Custo</div>
   <div class="ptab" id="ptBackProd" data-page="back-prod" draggable="true">Back - Produtivo</div>
+  <div class="ptab" id="ptAval2" data-page="aval2" draggable="true">Avaliações</div>
   <div class="ptab" id="ptVendaTop10" data-page="venda-top10" draggable="true">Venda Top 10</div>
   </div>
   <button class="ptab-arrow r" id="ptabArrowR" onclick="scrollTabs(1)" aria-label="Próximo">›</button>
@@ -734,6 +750,7 @@ let API_BACKCUSTO = _ls('v1_backcusto', 'https://script.google.com/macros/s/AKfy
 // Back Produtivo: URL FIXA embutida (não usa localStorage, para sempre subir certa no GitHub).
 let API_BACKPRODPE = 'https://script.google.com/macros/s/AKfycbxdDEbBzSq0I9h85KJsdCwtvRymzffs2VQKiWDK3gC6i5a-EH10zyfzl10Rj2lHdjbcWA/exec';
 try { _lsRm('v1_backprodpe'); } catch(e){}
+let API_AVAL2 = _ls('v1_aval2', '');
 let store = {geral:[],bace:[],pepb:[]};
 let rawRows = {geral:[],bace:[],pepb:[]};
 let avalData = null;
@@ -752,6 +769,7 @@ window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('apiUrl5').value = API_OFICINA || '';
   document.getElementById('apiUrl6').value = API_BACKCUSTO || '';
   document.getElementById('apiUrl7').value = API_BACKPRODPE || '';
+  document.getElementById('apiUrl8').value = API_AVAL2 || '';
   if(API_VENDAS)  { document.getElementById('st-vendas').textContent='✓ Configurado';  document.getElementById('st-vendas').style.color='var(--green)'; }
   if(API_AVAL)    { document.getElementById('st-aval').textContent='✓ Configurado';    document.getElementById('st-aval').style.color='var(--green)'; }
   if(API_ACOMP)   { document.getElementById('st-acomp').textContent='✓ Configurado';   document.getElementById('st-acomp').style.color='var(--green)'; }
@@ -759,6 +777,7 @@ window.addEventListener('DOMContentLoaded', () => {
   if(API_OFICINA) { document.getElementById('st-oficina').textContent='✓ Configurado'; document.getElementById('st-oficina').style.color='var(--green)'; }
   if(API_BACKCUSTO) { document.getElementById('st-backcusto').textContent='✓ Configurado'; document.getElementById('st-backcusto').style.color='var(--green)'; }
   if(API_BACKPRODPE) { document.getElementById('st-backprodpe').textContent='✓ Configurado'; document.getElementById('st-backprodpe').style.color='var(--green)'; }
+  if(API_AVAL2) { document.getElementById('st-aval2').textContent='✓ Configurado'; document.getElementById('st-aval2').style.color='var(--green)'; }
   loadVendas();
 });
 
@@ -779,9 +798,9 @@ function jsonp(baseUrl, params) {
 // ── CONFIG ────────────────────────────────────────────────────────────────────
 function toggleConfig() { document.getElementById('configPanel').style.display = document.getElementById('configPanel').style.display==='block'?'none':'block'; }
 function saveURL(which) {
-  const id   = which==='vendas'?'apiUrl': which==='aval'?'apiUrl2': which==='acomp'?'apiUrl3': which==='estoque'?'apiUrl4': which==='backcusto'?'apiUrl6': which==='backprodpe'?'apiUrl7':'apiUrl5';
-  const key  = which==='vendas'?'v1_vendas': which==='aval'?'v1_aval': which==='acomp'?'v1_acomp': which==='estoque'?'v1_estoque': which==='backcusto'?'v1_backcusto': which==='backprodpe'?'v1_backprodpe':'v1_oficina';
-  const stId = which==='vendas'?'st-vendas': which==='aval'?'st-aval': which==='acomp'?'st-acomp': which==='estoque'?'st-estoque': which==='backcusto'?'st-backcusto': which==='backprodpe'?'st-backprodpe':'st-oficina';
+  const id   = which==='vendas'?'apiUrl': which==='aval'?'apiUrl2': which==='acomp'?'apiUrl3': which==='estoque'?'apiUrl4': which==='backcusto'?'apiUrl6': which==='backprodpe'?'apiUrl7': which==='aval2'?'apiUrl8':'apiUrl5';
+  const key  = which==='vendas'?'v1_vendas': which==='aval'?'v1_aval': which==='acomp'?'v1_acomp': which==='estoque'?'v1_estoque': which==='backcusto'?'v1_backcusto': which==='backprodpe'?'v1_backprodpe': which==='aval2'?'v1_aval2':'v1_oficina';
+  const stId = which==='vendas'?'st-vendas': which==='aval'?'st-aval': which==='acomp'?'st-acomp': which==='estoque'?'st-estoque': which==='backcusto'?'st-backcusto': which==='backprodpe'?'st-backprodpe': which==='aval2'?'st-aval2':'st-oficina';
   const val  = document.getElementById(id).value.trim();
   if(!val) return alert('Cole a URL do Apps Script');
   if(which==='vendas')        { API_VENDAS=val;  _lsSet(key,val); }
@@ -795,6 +814,9 @@ function saveURL(which) {
   else if(which==='backprodpe'){ API_BACKPRODPE=val; _lsSet(key,val);
     const selbp=document.getElementById('backProdSheetSelect'); if(selbp) selbp.innerHTML='';
     if(typeof initBackProdPage==='function') initBackProdPage();
+  }
+  else if(which==='aval2'){ API_AVAL2=val; _lsSet(key,val);
+    if(typeof initAval2Page==='function') initAval2Page();
   }
   else                        { API_OFICINA=val; _lsSet(key,val); }
   const st = document.getElementById(stId);
@@ -820,15 +842,16 @@ function saveURL(which) {
   }
 }
 function clearURL(which) {
-  const id   = which==='vendas'?'apiUrl': which==='aval'?'apiUrl2': which==='acomp'?'apiUrl3': which==='estoque'?'apiUrl4': which==='backcusto'?'apiUrl6': which==='backprodpe'?'apiUrl7':'apiUrl5';
-  const key  = which==='vendas'?'v1_vendas': which==='aval'?'v1_aval': which==='acomp'?'v1_acomp': which==='estoque'?'v1_estoque': which==='backcusto'?'v1_backcusto': which==='backprodpe'?'v1_backprodpe':'v1_oficina';
-  const stId = which==='vendas'?'st-vendas': which==='aval'?'st-aval': which==='acomp'?'st-acomp': which==='estoque'?'st-estoque': which==='backcusto'?'st-backcusto': which==='backprodpe'?'st-backprodpe':'st-oficina';
+  const id   = which==='vendas'?'apiUrl': which==='aval'?'apiUrl2': which==='acomp'?'apiUrl3': which==='estoque'?'apiUrl4': which==='backcusto'?'apiUrl6': which==='backprodpe'?'apiUrl7': which==='aval2'?'apiUrl8':'apiUrl5';
+  const key  = which==='vendas'?'v1_vendas': which==='aval'?'v1_aval': which==='acomp'?'v1_acomp': which==='estoque'?'v1_estoque': which==='backcusto'?'v1_backcusto': which==='backprodpe'?'v1_backprodpe': which==='aval2'?'v1_aval2':'v1_oficina';
+  const stId = which==='vendas'?'st-vendas': which==='aval'?'st-aval': which==='acomp'?'st-acomp': which==='estoque'?'st-estoque': which==='backcusto'?'st-backcusto': which==='backprodpe'?'st-backprodpe': which==='aval2'?'st-aval2':'st-oficina';
   if(which==='vendas')      { API_VENDAS=''; }
   else if(which==='aval')   { API_AVAL=''; }
   else if(which==='acomp')  { API_ACOMP=''; }
   else if(which==='estoque'){ API_ESTOQUE=''; }
   else if(which==='backcusto'){ API_BACKCUSTO=''; }
   else if(which==='backprodpe'){ API_BACKPRODPE=''; }
+  else if(which==='aval2'){ API_AVAL2=''; }
   else                      { API_OFICINA=''; }
   _lsRm(key);
   document.getElementById(id).value='';
@@ -852,6 +875,7 @@ function switchPage(page) {
   const _po=document.getElementById('pageOficina');if(_po)_po.style.display=page==='oficina'?'block':'none';
   const _pbc=document.getElementById('pageBackCusto');if(_pbc)_pbc.style.display=page==='back-custo'?'block':'none';
   const _pbp=document.getElementById('pageBackProd');if(_pbp)_pbp.style.display=page==='back-prod'?'block':'none';
+  const _pav2=document.getElementById('pageAval2');if(_pav2)_pav2.style.display=page==='aval2'?'block':'none';
   const _pvt=document.getElementById('pageVendaTop10');if(_pvt)_pvt.style.display=page==='venda-top10'?'block':'none';
   document.getElementById('filterBar').style.display   = page==='vendas'&&document.getElementById('sheetSelect').options.length>0?'flex':'none';
   document.getElementById('avalFilterBar').style.display = isAval?'flex':'none';
@@ -867,10 +891,12 @@ function switchPage(page) {
   const _pto=document.getElementById('ptOficina');if(_pto)_pto.classList.toggle('active',page==='oficina');
   const _ptbc=document.getElementById('ptBackCusto');if(_ptbc)_ptbc.classList.toggle('active',page==='back-custo');
   const _ptbp=document.getElementById('ptBackProd');if(_ptbp)_ptbp.classList.toggle('active',page==='back-prod');
+  const _ptav2=document.getElementById('ptAval2');if(_ptav2)_ptav2.classList.toggle('active',page==='aval2');
   const _ptvt=document.getElementById('ptVendaTop10');if(_ptvt)_ptvt.classList.toggle('active',page==='venda-top10');
   if(page==='oficina') initOficinaPage();
   if(page==='back-custo') initBackCustoPage();
   if(page==='back-prod') initBackProdPage();
+  if(page==='aval2') initAval2Page();
   if(page==='venda-top10') initVendaTop10Page();
   if(page==='aging-estoque') initAgingEstoquePage();
   if(page==='aging-oficina') initAgingOficinaPage();
@@ -5750,6 +5776,7 @@ function loadBackProdSheet(name) {
       status: String(r['Status']||'').trim(),
       det: {
         DataFat:String(r['DataFat']||''), DataEntr:String(r['DataEntr']||''),
+        DataVistoria:String(r['DataVistoria']||''),
         IPVA:String(r['IPVA']||''), Averbacao:String(r['Averbacao']||''),
         DataEnvDesp:String(r['DataEnvDesp']||''), Emissao:String(r['Emissao']||''),
         SolicPlaca:String(r['SolicPlaca']||''), ComunicVenda:String(r['ComunicVenda']||''),
@@ -5913,6 +5940,7 @@ function _bpPlacasTable(rs){
     ['Cliente', r=>r.cliente],
     ['Data Fat.', r=>r.det.DataFat],
     ['Data Entrega', r=>r.det.DataEntr],
+    ['Data Vistoria', r=>r.det.DataVistoria],
     ['Status', r=>r.status],
     ['IPVA', r=>r.det.IPVA],
     ['Averbação', r=>r.det.Averbacao],
@@ -5925,13 +5953,13 @@ function _bpPlacasTable(rs){
     ['Financeira', r=>r.det.Financeira],
     ['Data Concl.', r=>r.det.DataConcl]
   ];
-  let h='<table style="border-collapse:collapse;font-size:10px;background:#fff;min-width:1100px">'
+  let h='<table style="border-collapse:collapse;font-size:12px;background:#fff;min-width:1200px">'
     +'<tr style="background:#3a3a3a;color:#fff">'
-    +cols.map(c=>'<td style="padding:4px 8px;white-space:nowrap;font-weight:700">'+c[0]+'</td>').join('')
+    +cols.map(c=>'<td style="padding:6px 10px;white-space:nowrap;font-weight:700">'+c[0]+'</td>').join('')
     +'</tr>';
   rs.forEach((r,i)=>{
     h+='<tr style="background:'+(i%2===0?'#fff':'#f5f4ef')+';border-bottom:1px solid #e5e3da">'
-      +cols.map(c=>'<td style="padding:4px 8px;white-space:nowrap">'+esc(c[1](r))+'</td>').join('')
+      +cols.map(c=>'<td style="padding:6px 10px;white-space:nowrap">'+esc(c[1](r))+'</td>').join('')
       +'</tr>';
   });
   h+='</table>';
