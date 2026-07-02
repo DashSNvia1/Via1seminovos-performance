@@ -5924,7 +5924,7 @@ function _bpMiniTable(titulo, label, grupos, du, keyPrefix){
       +'<td style="padding:5px 12px;text-align:right;font-weight:700;color:#1a3c8a">'+_bpFmt2(pm)+'</td></tr>';
     // linha de detalhe: tabela de placas
     h+='<tr id="bpg_det_'+gid+'" style="display:none"><td colspan="10" style="padding:0;background:#eceae3">'
-      +'<div style="overflow-x:auto;padding:8px 12px">'+_bpPlacasTable(rs)+'</div>'
+      +'<div style="padding:8px 12px">'+_bpPlacasTable(rs)+'</div>'
       +'</td></tr>';
   });
   h+='</table></div>';
@@ -5953,13 +5953,13 @@ function _bpPlacasTable(rs){
     ['Financeira', r=>r.det.Financeira],
     ['Data Concl.', r=>r.det.DataConcl]
   ];
-  let h='<table style="border-collapse:collapse;font-size:12px;background:#fff;min-width:1200px">'
+  let h='<table style="border-collapse:collapse;font-size:9.5px;background:#fff;width:100%;table-layout:auto">'
     +'<tr style="background:#3a3a3a;color:#fff">'
-    +cols.map(c=>'<td style="padding:6px 10px;white-space:nowrap;font-weight:700">'+c[0]+'</td>').join('')
+    +cols.map(c=>'<td style="padding:4px 5px;font-weight:700;line-height:1.2">'+c[0]+'</td>').join('')
     +'</tr>';
   rs.forEach((r,i)=>{
     h+='<tr style="background:'+(i%2===0?'#fff':'#f5f4ef')+';border-bottom:1px solid #e5e3da">'
-      +cols.map(c=>'<td style="padding:6px 10px;white-space:nowrap">'+esc(c[1](r))+'</td>').join('')
+      +cols.map(c=>'<td style="padding:4px 5px;line-height:1.2;word-break:break-word">'+esc(c[1](r))+'</td>').join('')
       +'</tr>';
   });
   h+='</table>';
