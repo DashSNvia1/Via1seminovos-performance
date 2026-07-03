@@ -740,7 +740,9 @@ const COLAB_COLORS = {
 
 // ── STATE ─────────────────────────────────────────────────────────────────────
 let API_VENDAS  = _ls('v1_vendas',  URL_VENDAS);
-let API_AVAL    = _ls('v1_aval',    URL_AVAL);
+// Avaliação (aba Tempo de Avaliação): URL FIXA embutida (não usa localStorage, para não travar em valor antigo).
+let API_AVAL    = URL_AVAL;
+try { _lsRm('v1_aval'); } catch(e){}
 let API_ACOMP   = _ls('v1_acomp',   'https://script.google.com/macros/s/AKfycbwi67zRTahAD7b_KbqIrH9d1g0FKETD5Ui-o4azwDL64W3Wdoo7NfmmIYyIy7wOh1SCuA/exec');
 let API_ESTOQUE = _ls('v1_estoque', 'https://script.google.com/macros/s/AKfycbzO8yYahoKvXi4LjVFOGzDciDkO2EDmqu605nuHmfdFZkswSLSrnJcm7MaLotbK5s-J/exec');
 // Oficina: URL FIXA embutida (não usa localStorage, para sempre subir certa no GitHub).
