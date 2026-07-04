@@ -576,6 +576,10 @@ th:hover .col-rh,.col-rh:hover,.col-rh.rh-drag{opacity:1;background:rgba(255,255
 </div>
 
 <div id="pageAval2" style="display:none">
+  <div style="background:#fff;border-bottom:1px solid var(--border);padding:6px 20px;display:flex;align-items:center;gap:8px">
+    <span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Aba:</span>
+    <select class="sheet-select" id="aval2SheetSelect" onchange="loadAval2Sheet(this.value)" style="min-width:200px"></select>
+  </div>
   <div style="padding:16px 20px 60px" id="aval2-body">
     <div style="padding:2rem;color:var(--muted)">Configure a URL da API <b>Avaliações</b> nas configurações (⚙) para carregar esta aba.</div>
   </div>
@@ -752,7 +756,9 @@ let API_BACKCUSTO = _ls('v1_backcusto', 'https://script.google.com/macros/s/AKfy
 // Back Produtivo: URL FIXA embutida (não usa localStorage, para sempre subir certa no GitHub).
 let API_BACKPRODPE = 'https://script.google.com/macros/s/AKfycbxdDEbBzSq0I9h85KJsdCwtvRymzffs2VQKiWDK3gC6i5a-EH10zyfzl10Rj2lHdjbcWA/exec';
 try { _lsRm('v1_backprodpe'); } catch(e){}
-let API_AVAL2 = _ls('v1_aval2', '');
+// Avaliações: URL FIXA embutida (não usa localStorage, para sempre subir certa no GitHub).
+let API_AVAL2 = 'https://script.google.com/macros/s/AKfycbyRi4yHGaQmCK9KE3V5AzHl63afA-nx-HXt3H-K5uBf6kUiELjHrBjJ7tfdPoqhM5yT/exec';
+try { _lsRm('v1_aval2'); } catch(e){}
 let store = {geral:[],bace:[],pepb:[]};
 let rawRows = {geral:[],bace:[],pepb:[]};
 let avalData = null;
@@ -6112,6 +6118,318 @@ function toggleBpLoja(rid){
   if(icon) icon.textContent=open?'⊟':'⊞';
 }
 
+
+// ── AVALIAÇÕES (Mix gerencial) ───────────────────────────────────────────────
+let _av2Rows = [];
+let _av2Sheet = '';
+const _AV2_DIMS = [
+  ['estado','Estado'], ['loja','Loja'], ['tipo','Tipo de Avaliação'], ['status','Status'],
+  ['vendedor','Vendedor'], ['avaliador','Avaliador'], ['marca','Marca'], ['modelo','Modelo'],
+  ['finalidade','Finalidade'], ['classif','Classificação']
+];
+let _av2All = {}; let _av2Sel = {};
+_AV2_DIMS.forEach(([k])=>{ _av2All[k]=[]; _av2Sel[k]=new Set(); });
+let _av2Periodo = {ini:'', fim:''};
+let _av2Placa = '';
+
+const _av2N = v => (v||0).toLocaleString('pt-BR');
+const _av2Pct = (n,d) => d ? Math.round(n/d*100) : 0;
+const _av2RS = v => 'R$ '+Math.round(v||0).toLocaleString('pt-BR');
+const _av2Pct1 = v => (v*100).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+'%';
+
+function initAval2Page(){
+  const body=document.getElementById('aval2-body');
+  if(!API_AVAL2){
+    body.innerHTML='<div style="padding:2rem;color:var(--muted)">Configure a URL da API <b>Avaliações</b> nas configurações (⚙).</div>';
+    return;
+  }
+  const sel=document.getElementById('aval2SheetSelect');
+  if(!sel) return;
+  if(sel.options.length>1){ if(sel.value) loadAval2Sheet(sel.value); return; }
+  sel.innerHTML='<option>Carregando abas...</option>';
+  jsonp(API_AVAL2,{sheet:'__sheets__'}).then(data=>{
+    const sheets=data.sheets||[];
+    sel.innerHTML=sheets.map(s=>'<option value="'+s+'">'+s+'</option>').join('');
+    if(sel.options.length){ sel.value=sel.options[0].value; loadAval2Sheet(sel.value); }
+  }).catch(()=>{ sel.innerHTML='<option>Erro ao carregar abas</option>'; });
+}
+
+function loadAval2Sheet(name){
+  const body=document.getElementById('aval2-body');
+  body.innerHTML='<div style="padding:2rem;text-align:center;color:var(--muted)"><div class="spin2" style="margin:0 auto 8px"></div>Carregando avaliações...</div>';
+  jsonp(API_AVAL2,{sheet:name}).then(data=>{
+    if(data.error) throw new Error(data.error);
+    _av2Sheet=name;
+    _av2Rows=(data.rows||[]).map(r=>({
+      estado: String(r['Estado']||'').trim().toUpperCase() || '(sem estado)',
+      loja: String(r['Loja']||'').trim() || '(sem loja)',
+      tipo: String(r['Tipo']||'').trim().toUpperCase() || '(sem tipo)',
+      status: String(r['Status']||'').trim().toUpperCase() || '(sem status)',
+      vendedor: String(r['Vendedor']||'').trim().toUpperCase() || '(sem vendedor)',
+      avaliador: String(r['Avaliador']||'').trim().toUpperCase() || '(sem avaliador)',
+      marca: String(r['Marca']||'').trim().toUpperCase() || '(sem marca)',
+      modelo: String(r['Modelo']||'').trim().toUpperCase() || '(sem modelo)',
+      finalidade: String(r['Finalidade']||'').trim().toUpperCase() || '(s/ finalidade)',
+      classif: String(r['Classificacao']||'').trim().toUpperCase() || '(s/ classif)',
+      placa: String(r['Placa']||'').trim().toUpperCase(),
+      data: String(r['DataCriacao']||'').trim(),   // coluna E — referência do mês
+      valorAval: +r['ValorAval']||0,               // coluna U
+      fipe: +r['FIPE']||0                          // coluna AE
+    })).filter(r=>r.loja!=='(sem loja)' || r.placa || r.marca!=='(sem marca)');
+
+    _AV2_DIMS.forEach(([k])=>{
+      _av2All[k]=[...new Set(_av2Rows.map(r=>r[k]))].sort();
+      _av2Sel[k]=new Set(_av2All[k]);
+    });
+    _av2Periodo={ini:'',fim:''};
+    _av2Placa='';
+    renderAval2Shell();
+  }).catch(e=>{ body.innerHTML='<div style="padding:2rem;color:var(--red)">Erro: '+e.message+'</div>'; });
+}
+
+function _av2Filtered(){
+  const pl=_av2Placa.trim().toUpperCase();
+  return _av2Rows.filter(r=>{
+    for(const [k] of _AV2_DIMS){ if(!_av2Sel[k].has(r[k])) return false; }
+    if(_av2Periodo.ini && r.data && r.data < _av2Periodo.ini) return false;
+    if(_av2Periodo.fim && r.data && r.data > _av2Periodo.fim) return false;
+    if(pl && r.placa.indexOf(pl)===-1) return false;
+    return true;
+  });
+}
+
+function _av2DDLabel(k){
+  const fem=(k==='loja'||k==='marca'||k==='classif'||k==='finalidade');
+  const todos=fem?'Todas':'Todos';
+  return _av2Sel[k].size===_av2All[k].length ? todos : _av2Sel[k].size+' selec.';
+}
+function toggleAv2DD(k){
+  _AV2_DIMS.forEach(([o])=>{ const dd=document.getElementById('av2DD_'+o); if(dd) dd.style.display=(o===k && dd.style.display==='none')?'block':'none'; });
+}
+function toggleAv2Item(k,val){
+  if(_av2Sel[k].has(val)) _av2Sel[k].delete(val); else _av2Sel[k].add(val);
+  document.querySelectorAll('.av2-cb-'+k).forEach(cb=>{ if(cb.dataset.v===val) cb.checked=_av2Sel[k].has(val); });
+  _applyAv2();
+}
+function toggleAv2All(k,checked){
+  document.querySelectorAll('.av2-cb-'+k).forEach(cb=>{ cb.checked=checked; if(checked) _av2Sel[k].add(cb.dataset.v); else _av2Sel[k].delete(cb.dataset.v); });
+  _applyAv2();
+}
+function setAv2Periodo(campo,val){ _av2Periodo[campo]=val; _applyAv2(); }
+function setAv2Placa(val){ _av2Placa=val; _applyAv2(); }
+function _applyAv2(){
+  _AV2_DIMS.forEach(([k])=>{ const lb=document.getElementById('av2Lbl_'+k); if(lb) lb.textContent=_av2DDLabel(k); });
+  renderAval2Content();
+}
+function resetAv2Filtros(){
+  _AV2_DIMS.forEach(([k])=>_av2Sel[k]=new Set(_av2All[k]));
+  _av2Periodo={ini:'',fim:''}; _av2Placa='';
+  renderAval2Shell();
+}
+
+function _av2Dropdown(k,titulo){
+  const fem=(k==='loja'||k==='marca'||k==='classif'||k==='finalidade');
+  const todos=fem?'Todas':'Todos';
+  const opts=_av2All[k].map(v=>
+    '<label style="display:flex;align-items:center;gap:10px;padding:7px 14px;cursor:pointer;border-bottom:1px solid #f5f4f0;font-size:11px" onmouseenter="this.style.background=\'#f5f4f0\'" onmouseleave="this.style.background=\'\'">'+
+    '<input type="checkbox" class="av2-cb-'+k+'" data-v="'+String(v).replace(/"/g,'&quot;')+'" checked onchange="toggleAv2Item(\''+k+'\',\''+String(v).replace(/'/g,"\\'")+'\')">'+
+    '<span style="flex:1">'+v+'</span></label>').join('');
+  return '<div style="position:relative;display:inline-block" class="av2-dd-wrap">'+
+    '<button onclick="toggleAv2DD(\''+k+'\')" style="display:flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--border);border-radius:3px;padding:6px 10px;font-size:11px;font-weight:600;cursor:pointer;justify-content:space-between">'+
+      '<span>'+titulo+'</span><span id="av2Lbl_'+k+'" style="color:var(--muted);font-weight:400">'+_av2DDLabel(k)+'</span><span style="font-size:9px;color:var(--muted)">▼</span>'+
+    '</button>'+
+    '<div id="av2DD_'+k+'" style="display:none;position:absolute;top:100%;left:0;z-index:999;background:#fff;border:1px solid var(--border);border-radius:3px;box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:250px;max-height:300px;overflow-y:auto;margin-top:2px">'+
+      '<label style="display:flex;align-items:center;gap:10px;padding:8px 14px;cursor:pointer;border-bottom:1px solid #e0dfd8;font-size:12px;font-weight:600"><input type="checkbox" checked onchange="toggleAv2All(\''+k+'\',this.checked)"><span>'+todos+'</span></label>'+
+      opts+
+    '</div></div>';
+}
+
+function renderAval2Shell(){
+  const body=document.getElementById('aval2-body'); if(!body) return;
+  if(!_av2Rows.length){ body.innerHTML='<div style="padding:2rem;color:var(--muted)">Nenhuma avaliação nesta aba.</div>'; return; }
+  body.innerHTML=
+    '<div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;flex-wrap:wrap">'+
+      _AV2_DIMS.map(([k,l])=>_av2Dropdown(k,l)).join('')+
+    '</div>'+
+    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">'+
+      '<div style="display:flex;align-items:center;gap:5px">'+
+        '<span style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--muted)">Placa:</span>'+
+        '<input type="text" id="av2Placa" placeholder="Digite a placa..." oninput="setAv2Placa(this.value)" style="border:1px solid var(--border2);border-radius:3px;padding:5px 8px;font-size:11px;width:130px;text-transform:uppercase">'+
+      '</div>'+
+      '<div style="display:flex;align-items:center;gap:5px">'+
+        '<span style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--muted)">Período (Data de Criação):</span>'+
+        '<input type="date" id="av2Ini" onchange="setAv2Periodo(\'ini\',this.value)" style="border:1px solid var(--border2);border-radius:3px;padding:4px 6px;font-size:11px">'+
+        '<span style="color:var(--muted)">→</span>'+
+        '<input type="date" id="av2Fim" onchange="setAv2Periodo(\'fim\',this.value)" style="border:1px solid var(--border2);border-radius:3px;padding:4px 6px;font-size:11px">'+
+      '</div>'+
+      '<button onclick="resetAv2Filtros()" style="background:#fff;border:1px solid var(--border2);border-radius:3px;padding:6px 12px;font-size:11px;font-weight:600;cursor:pointer">Limpar filtros</button>'+
+    '</div>'+
+    '<div id="av2-kpis" style="display:flex;gap:12px;margin-bottom:18px;flex-wrap:wrap"></div>'+
+    '<div id="av2-praca" style="margin-bottom:18px"></div>'+
+    '<div id="av2-mix" style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:18px"></div>'+
+    '<div id="av2-rank" style="display:flex;gap:16px;flex-wrap:wrap"></div>';
+
+  setTimeout(()=>{ document.addEventListener('click',function(e){ if(e.target.closest('.av2-dd-wrap')) return; _AV2_DIMS.forEach(([k])=>{const dd=document.getElementById('av2DD_'+k);if(dd)dd.style.display='none';}); }); },100);
+  renderAval2Content();
+}
+
+// % pago = valorAval / fipe (só linhas válidas: valorAval >= 1000 e fipe > 0)
+function _av2GroupBy(rows,key){
+  const m={};
+  rows.forEach(r=>{
+    const k=r[key];
+    if(!m[k]) m[k]={nome:k,qtde:0,somaAval:0,nAval:0,somaPct:0,nPct:0};
+    m[k].qtde++;
+    if(r.valorAval>=1000 && r.valorAval<=2000000){
+      m[k].somaAval+=r.valorAval; m[k].nAval++;
+      if(r.fipe>0){ const _p=r.valorAval/r.fipe; if(_p<=3){ m[k].somaPct+=_p; m[k].nPct++; } }
+    }
+  });
+  return Object.values(m).sort((a,b)=>b.qtde-a.qtde);
+}
+
+// ── Tabela por Praça (Estado) — só SHOWROOM ──
+let _av2Limiar = 0.804; // corte de % pago (editável no painel; padrão 80,4%)
+function setAv2Limiar(v){
+  const n = parseFloat(String(v).replace(',','.'));
+  if(!isNaN(n) && n>0) _av2Limiar = n/100;
+  renderAval2Content();
+}
+
+function _av2PracaTable(rowsFiltrados){
+  const rows = rowsFiltrados.filter(r=>r.finalidade==='SHOWROOM');
+  if(!rows.length) return '';
+  const lim=_av2Limiar;
+  const porEstado={};
+  rows.forEach(r=>{
+    const e=r.estado||'(sem estado)';
+    if(!porEstado[e]) porEstado[e]={aval:0, acima:0, somaPct:0, nPct:0, somaVal:0, nVal:0};
+    const P=porEstado[e];
+    P.aval++;
+    if(r.valorAval>=1000 && r.valorAval<=2000000){
+      P.somaVal+=r.valorAval; P.nVal++;
+      if(r.fipe>0){
+        const pct=r.valorAval/r.fipe;
+        if(pct<=3){
+          P.somaPct+=pct; P.nPct++;
+          if(pct>lim) P.acima++;
+        }
+      }
+    }
+  });
+  const arr=Object.entries(porEstado).sort((a,b)=>b[1].aval-a[1].aval);
+  // totais
+  const T={aval:0,acima:0,somaPct:0,nPct:0,somaVal:0,nVal:0};
+  arr.forEach(([,P])=>{T.aval+=P.aval;T.acima+=P.acima;T.somaPct+=P.somaPct;T.nPct+=P.nPct;T.somaVal+=P.somaVal;T.nVal+=P.nVal;});
+
+  const limLabel=(lim*100).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+'%';
+  const TH='background:#1a2a48;color:#fff;padding:8px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap';
+  const TD='padding:7px 12px;white-space:nowrap';
+  const fila=(nome,P,destaque)=>{
+    const pctMed=P.nPct?P.somaPct/P.nPct:0;
+    const ticket=P.nVal?P.somaVal/P.nVal:0;
+    const st=destaque?'background:#111;color:#fff;font-weight:700':'border-bottom:1px solid var(--border)';
+    return '<tr style="'+st+'">'
+      +'<td style="'+TD+';font-weight:700">'+nome+'</td>'
+      +'<td style="'+TD+';text-align:right;font-weight:700">'+_av2N(P.aval)+'</td>'
+      +'<td style="'+TD+';text-align:right">'+_av2N(P.acima)+'</td>'
+      +'<td style="'+TD+';text-align:right;font-weight:700;color:'+(destaque?'#fff':'#c62828')+'">'+_av2Pct1(P.aval?P.acima/P.aval:0)+'</td>'
+      +'<td style="'+TD+';text-align:right;font-weight:700">'+(pctMed>0?_av2Pct1(pctMed):'—')+'</td>'
+      +'<td style="'+TD+';text-align:right">'+(P.somaVal>0?_av2RS(P.somaVal):'—')+'</td>'
+      +'<td style="'+TD+';text-align:right">'+(ticket>0?_av2RS(ticket):'—')+'</td>'
+      +'</tr>';
+  };
+  let h='<div style="border:1px solid var(--border);border-radius:3px;overflow:hidden">'
+    +'<div style="background:#1e1e1e;color:#fff;padding:8px 14px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
+      +'<span>Por Praça — SHOWROOM</span>'
+      +'<span style="font-weight:400;text-transform:none;font-size:10px;opacity:.8">corte % pago:</span>'
+      +'<input type="number" step="0.1" min="1" max="200" value="'+(lim*100).toFixed(1)+'" onchange="setAv2Limiar(this.value)" '
+        +'style="width:64px;border:1px solid #555;border-radius:3px;padding:2px 6px;font-size:11px;font-weight:700;text-align:center;background:#2a2a2a;color:#fff">'
+      +'<span style="font-weight:400;text-transform:none;font-size:10px;opacity:.8">%</span>'
+    +'</div>'
+    +'<div class="tbl-wrap"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr>'
+      +'<th style="'+TH+';text-align:left">Praça</th>'
+      +'<th style="'+TH+';text-align:right">Avaliações</th>'
+      +'<th style="'+TH+';text-align:right">Qtd %Pago &gt; '+limLabel+'</th>'
+      +'<th style="'+TH+';text-align:right">% &gt; '+limLabel+'</th>'
+      +'<th style="'+TH+';text-align:right">%Pago Médio</th>'
+      +'<th style="'+TH+';text-align:right">Valor Avaliado (R$)</th>'
+      +'<th style="'+TH+';text-align:right">Ticket Médio (R$)</th>'
+    +'</tr></thead><tbody>'
+    +arr.map(([e,P])=>fila(e,P,false)).join('')
+    +fila('TOTAL ('+arr.length+' praças)',T,true)
+    +'</tbody></table></div>'
+    +'<div style="font-size:10px;color:var(--muted);padding:6px 12px">Somente finalidade SHOWROOM · Valores, Ticket e % Pago consideram apenas avaliações entre R$ 1 mil e R$ 2 milhões (com FIPE para o % Pago); valores fora dessa faixa são tratados como erro de dado.</div>'
+    +'</div>';
+  return h;
+}
+
+function renderAval2Content(){
+  const rows=_av2Filtered();
+  const kpi=document.getElementById('av2-kpis');
+  const mix=document.getElementById('av2-mix');
+  const praca=document.getElementById('av2-praca');
+  const rank=document.getElementById('av2-rank');
+  if(!mix) return;
+  if(!rows.length){ if(kpi)kpi.innerHTML=''; if(praca)praca.innerHTML=''; mix.innerHTML='<div style="padding:1rem;color:var(--muted)">Sem avaliações para os filtros.</div>'; if(rank)rank.innerHTML=''; return; }
+  if(praca) praca.innerHTML=_av2PracaTable(rows);
+
+  const total=rows.length;
+  const abaixo1k=rows.filter(r=>r.valorAval<1000).length;
+  const validas=rows.filter(r=>r.valorAval>=1000 && r.valorAval<=2000000);
+  const ticket=validas.length?validas.reduce((s,r)=>s+r.valorAval,0)/validas.length:0;
+  const comFipe=validas.filter(r=>r.fipe>0 && (r.valorAval/r.fipe)<=3);
+  const pctPago=comFipe.length?comFipe.reduce((s,r)=>s+r.valorAval/r.fipe,0)/comFipe.length:0;
+  const showroom=rows.filter(r=>r.finalidade==='SHOWROOM').length;
+  const repasse=rows.filter(r=>r.finalidade==='REPASSE').length;
+  const avaliadores=new Set(rows.map(r=>r.avaliador)).size;
+  const lojas=new Set(rows.map(r=>r.loja)).size;
+
+  const kCard=(l,v,c,tt)=>'<div style="background:#fff;border:1px solid var(--border);border-left:3px solid '+c+';border-radius:3px;padding:.6rem 1.1rem;min-width:125px"'+(tt?' title="'+tt.replace(/"/g,'&quot;')+'"':'')+'><p style="font-size:10px;color:var(--muted);margin:0 0 2px;text-transform:uppercase;letter-spacing:.5px;font-weight:600">'+l+'</p><p style="font-size:19px;font-weight:700;margin:0">'+v+'</p></div>';
+  if(kpi) kpi.innerHTML=
+    kCard('Total Avaliações',_av2N(total),'#1a3c8a','Total de linhas (Data de Criação — coluna E)')+
+    kCard('% Pago',pctPago>0?_av2Pct1(pctPago):'—','#c62828','Média de Valor Avaliado (U) ÷ FIPE (AE), só avaliações ≥ R$ 1 mil com FIPE')+
+    kCard('Ticket Médio',ticket>0?_av2RS(ticket):'—','#1a7a4c','Média do Valor Avaliado (só ≥ R$ 1 mil)')+
+    kCard('Abaixo de R$ 1 mil',_av2N(abaixo1k)+' ('+_av2Pct(abaixo1k,total)+'%)','#777','Avaliações com Valor Avaliado (U) < R$ 1.000 — mostradas à parte, fora do % Pago e do Ticket')+
+    kCard('SHOWROOM',_av2N(showroom)+' ('+_av2Pct(showroom,total)+'%)','#6a1a7a')+
+    kCard('REPASSE',_av2N(repasse)+' ('+_av2Pct(repasse,total)+'%)','#c8921a')+
+    kCard('Avaliadores',_av2N(avaliadores),'#1a6a7a')+
+    kCard('Lojas',_av2N(lojas),'#555');
+
+  const linha=(d,i,max,cor,total)=>{
+    const tk=d.nAval?d.somaAval/d.nAval:0;
+    const pp=d.nPct?d.somaPct/d.nPct:0;
+    return '<tr style="background:'+(i%2===0?'#fff':'#fafaf8')+';border-bottom:1px solid var(--border)">'+
+      '<td style="padding:6px 12px;font-weight:600">'+d.nome+'<div style="background:#e8e7e0;border-radius:2px;height:4px;width:110px;overflow:hidden;margin-top:3px"><div style="width:'+Math.round(d.qtde/max*110)+'px;background:'+cor+';height:100%"></div></div></td>'+
+      '<td style="padding:6px 12px;text-align:right;font-weight:700">'+_av2N(d.qtde)+'</td>'+
+      '<td style="padding:6px 12px;text-align:right;color:var(--muted)">'+_av2Pct(d.qtde,total)+'%</td>'+
+      '<td style="padding:6px 12px;text-align:right">'+(tk>0?_av2RS(tk):'—')+'</td>'+
+      '<td style="padding:6px 12px;text-align:right;font-weight:700;color:'+(pp>0?(pp>0.9?'#c62828':pp>0.8?'#c8921a':'#1a7a4c'):'#ccc')+'">'+(pp>0?_av2Pct1(pp):'—')+'</td></tr>';
+  };
+  const cab=(rotulo)=>'<tr style="background:#e0dfd8;font-weight:700"><td style="padding:4px 12px">'+rotulo+'</td><td style="padding:4px 12px;text-align:right">Qtde</td><td style="padding:4px 12px;text-align:right">%</td><td style="padding:4px 12px;text-align:right">Ticket Médio</td><td style="padding:4px 12px;text-align:right" title="Valor Avaliado ÷ FIPE">% Pago</td></tr>';
+
+  const mixBlock=(titulo,key,cor)=>{
+    const arr=_av2GroupBy(rows,key);
+    const max=arr.length?arr[0].qtde:1;
+    return '<div style="flex:1;min-width:300px;border:1px solid var(--border);border-radius:3px;overflow:hidden">'+
+      '<div style="background:#1e1e1e;color:#fff;padding:8px 14px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px">'+titulo+'</div>'+
+      '<table style="width:100%;border-collapse:collapse;font-size:12px">'+cab(titulo)+
+      arr.map((d,i)=>linha(d,i,max,cor,total)).join('')+
+      '</table></div>';
+  };
+  mix.innerHTML = mixBlock('Classificação','classif','#1a3c8a') + mixBlock('Finalidade','finalidade','#1a7a4c') + mixBlock('Tipo de Avaliação','tipo','#6a1a7a');
+
+  const rankBlock=(titulo,key,cor,limit)=>{
+    const arr=_av2GroupBy(rows,key).slice(0,limit);
+    const max=arr.length?arr[0].qtde:1;
+    return '<div style="flex:1;min-width:340px;border:1px solid var(--border);border-radius:3px;overflow:hidden">'+
+      '<div style="background:#1e1e1e;color:#fff;padding:8px 14px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px">'+titulo+'</div>'+
+      '<table style="width:100%;border-collapse:collapse;font-size:12px">'+cab('Nome')+
+      arr.map((d,i)=>linha(d,i,max,cor,total)).join('')+
+      '</table></div>';
+  };
+  if(rank) rank.innerHTML = rankBlock('Marcas mais avaliadas','marca','#1a3c8a',15) + rankBlock('Modelos mais avaliados','modelo','#1a7a4c',15) + rankBlock('Por Loja','loja','#c8921a',15) + rankBlock('Por Avaliador','avaliador','#6a1a7a',15);
+}
 
 // ── ABAS ROLÁVEIS (telas menores) ─────────────────────────────────────────────
 (function(){
