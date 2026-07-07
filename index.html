@@ -631,7 +631,7 @@ function _lsSet(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
 function _lsRm(k)   { try{ localStorage.removeItem(k); }catch(e){} }
 // ─────────────────────────────────────────────────────────────────────────────
 
-const URL_VENDAS = 'https://script.google.com/macros/s/AKfycbx2r_KKZs0_1prkqscf-80Ggggnt25ettxvI8GlYMy-IvXjRidcfOkDOgjyOsMvgpah_Q/exec';
+const URL_VENDAS = 'https://script.google.com/macros/s/AKfycbzUerLgBAER0V1Hqb4bdhFgRnu-eooa0cnYDA7GaCZmcjI3gqoYhm-GK8f9LupPLxAi5w/exec';
 const URL_AVAL   = 'https://script.google.com/macros/s/AKfycbyZFbIpc-yu7MLWYDttVYi96f2r8vvMAxHjAh0yDN45EgYF9q0mlo8V36PSV-T4uJazUw/exec';
 
 // ── TAB ORDER (drag & drop) ───────────────────────────────────────────────────
@@ -743,7 +743,9 @@ const COLAB_COLORS = {
 // (declared at top of script — see above)
 
 // ── STATE ─────────────────────────────────────────────────────────────────────
-let API_VENDAS  = _ls('v1_vendas',  URL_VENDAS);
+// Vendas: URL FIXA embutida (não usa localStorage, para não travar em valor antigo).
+let API_VENDAS  = URL_VENDAS;
+try { _lsRm('v1_vendas'); } catch(e){}
 // Avaliação (aba Tempo de Avaliação): URL FIXA embutida (não usa localStorage, para não travar em valor antigo).
 let API_AVAL    = URL_AVAL;
 try { _lsRm('v1_aval'); } catch(e){}
