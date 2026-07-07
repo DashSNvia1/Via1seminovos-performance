@@ -1053,7 +1053,8 @@ async function loadSheet(name) {
     document.getElementById('loadingVendas').style.display='none';
     showTab('geral',false);
     // Cruza com o estoque do mesmo mês (assíncrono; preenche a coluna "Em Estoque")
-    loadEstoqueForVendas(name);
+    // Isolado: se a API de estoque falhar, NÃO trava a aba Vendas.
+    try { Promise.resolve(loadEstoqueForVendas(name)).catch(()=>{ window._estoqueStockRows=[]; }); } catch(e){ window._estoqueStockRows=[]; }
     // Atualiza Top 10 se a aba estiver visível
     if(document.getElementById('pageVendaTop10')?.style.display==='block') initVendaTop10Page();
   } catch(e) {
@@ -4971,17 +4972,26 @@ function initVendaTop10Page() {
     dst.value = src.value;
   }
 
-  // Se dados ainda não carregados, dispara o carregamento
+  // Se dados ainda não carregados, dispara o carregamento e renderiza ao terminar
   const all = window._allVendaRows;
   if(!all || !all.geral || !all.geral.length) {
+    // proteção contra loop: só tenta carregar uma vez por aba
     const sheet = src?.value || dst?.value;
+    if(window._top10Tried === sheet){
+      document.getElementById('venda-top10-body').innerHTML='<div style="padding:2rem;color:var(--muted)">Sem dados de vendas para esta aba.</div>';
+      return;
+    }
     if(sheet) {
+      window._top10Tried = sheet;
       document.getElementById('venda-top10-body').innerHTML =
         '<div style="padding:2rem;text-align:center;color:var(--muted)"><div class="spin2" style="margin:0 auto 8px"></div>Carregando dados...</div>';
-      loadSheet(sheet); // carrega vendas — renderVendaTop10 será chamado depois
+      Promise.resolve(loadSheet(sheet)).then(()=>{ initVendaTop10Page(); }).catch(()=>{
+        document.getElementById('venda-top10-body').innerHTML='<div style="padding:2rem;color:var(--red)">Erro ao carregar os dados de vendas.</div>';
+      });
     }
     return;
   }
+  window._top10Tried = null;
 
   // Sync lojas from _allVendaRows
   const lojas = [...new Set((all.geral||[]).map(r=>r.loja).filter(Boolean))].sort();
