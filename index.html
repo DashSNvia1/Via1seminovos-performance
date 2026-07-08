@@ -4963,6 +4963,7 @@ function toggleAgingOficinaDetail(id, row) {
 // \u2500\u2500 VENDA TOP 10 ──────────────────────────────────────────────────────────────
 let _top10SelectedLojas = new Set();
 let _top10AllLojas = [];
+let _top10LastSheet = null; // detecta troca de aba p/ resincronizar seleção de lojas
 
 function initVendaTop10Page() {
   // Sync ABA selector with vendas
@@ -4997,7 +4998,14 @@ function initVendaTop10Page() {
   // Sync lojas from _allVendaRows
   const lojas = [...new Set((all.geral||[]).map(r=>r.loja).filter(Boolean))].sort();
   _top10AllLojas = lojas;
-  if(_top10SelectedLojas.size === 0) _top10SelectedLojas = new Set(lojas);
+  // Resincroniza a seleção sempre que a aba mudar (não só quando está vazia) —
+  // evita que lojas novas do mês atual fiquem de fora por causa de uma seleção
+  // antiga, feita numa aba com menos lojas.
+  const _curSheet = src?.value || dst?.value || '';
+  if(_top10SelectedLojas.size === 0 || _top10LastSheet !== _curSheet) {
+    _top10SelectedLojas = new Set(lojas);
+  }
+  _top10LastSheet = _curSheet;
 
   // Build loja items
   const items = document.getElementById('top10LojaItems');
