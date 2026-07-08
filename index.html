@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Via1seminovos - Performance</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%23111'/%3E%3Ctext x='16' y='22' font-family='Arial' font-size='14' font-weight='bold' fill='%23fff' text-anchor='middle'%3EV1%3C/text%3E%3C/svg%3E">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -999,11 +1000,11 @@ async function loadSheet(name) {
       const loja=String(r['LOJA']||'').trim().toUpperCase();
       const finalidade=name.toUpperCase().includes('REPASSE')?'REPASSE':'SHOWROOM';
       return {
-        loja, familia:extractFamily(r['MODELO']||r[' ']||''),
+        loja, familia:extractFamily(r['MODELO']||r[' ']||r['']||''),
         vendas:toNum(r['( = ) Total']), margem:toNum(r['% Margem']),
         pago:toNum(r['%PAGO']), fipe:toNum(r['% VENDA FIPE VENDA']||r['% VENDA FIPE']||r['%FIPE']||r['FIPE']),
         tkm:toNum(r['TKM']),
-        modelo:String(r['MODELO']||r[' ']||'').trim(),
+        modelo:String(r['MODELO']||r[' ']||r['']||'').trim(),
         placa:String(r['PLACA']||'').trim(),
         totalRecebido:toNum(r['Total Recebido']),
         diasEstoque:toNum(r['DiasEstoque']),
@@ -2800,8 +2801,8 @@ async function loadGiroSheet(name) {
     const data = await jsonp(API_VENDAS, {sheet:name});
     if(data.error) throw new Error(data.error);
     const rows = (data.rows||[]).map(r=>({
-      familia: extractFamily(r['MODELO']||r[' ']||''),
-      modelo:  String(r['MODELO']||r[' ']||'').trim(),
+      familia: extractFamily(r['MODELO']||r[' ']||r['']||''),
+      modelo:  String(r['MODELO']||r[' ']||r['']||'').trim(),
       loja:    String(r['LOJA']||'').trim(),
       vendas:  toNum(r['( = ) Total']),
       dias:    toNum(r['DiasEstoque']),
