@@ -6195,7 +6195,8 @@ function loadAval2Sheet(name){
       placa: String(r['Placa']||'').trim().toUpperCase(),
       data: String(r['DataCriacao']||'').trim(),   // coluna E — referência do mês
       valorAval: +r['ValorAval']||0,               // coluna U
-      fipe: +r['FIPE']||0                          // coluna AE
+      fipe: +r['FIPE']||0,                         // coluna AE
+      km: +r['KM']||0                              // coluna AB
     })).filter(r=>r.loja!=='(sem loja)' || r.placa || r.marca!=='(sem marca)');
 
     _AV2_DIMS.forEach(([k])=>{
@@ -6210,13 +6211,29 @@ function loadAval2Sheet(name){
 
 function _av2Filtered(){
   const pl=_av2Placa.trim().toUpperCase();
-  return _av2Rows.filter(r=>{
+  const base=_av2Rows.filter(r=>{
     for(const [k] of _AV2_DIMS){ if(!_av2Sel[k].has(r[k])) return false; }
     if(_av2Periodo.ini && r.data && r.data < _av2Periodo.ini) return false;
     if(_av2Periodo.fim && r.data && r.data > _av2Periodo.fim) return false;
     if(pl && r.placa.indexOf(pl)===-1) return false;
     return true;
   });
+  return _av2DedupPlaca(base);
+}
+
+// Dedup GLOBAL por placa: mantém a avaliação de MAIOR Data de Criação (coluna E).
+// Placas em branco não são agrupadas (cada uma conta, pois não dá p/ saber se é a mesma).
+function _av2DedupPlaca(rows){
+  const ultima={};   // placa -> linha vencedora
+  const semPlaca=[];
+  rows.forEach(r=>{
+    const p=(r.placa||'').trim().toUpperCase();
+    if(!p || p==='—'){ semPlaca.push(r); return; }
+    const atual=ultima[p];
+    // data no formato aaaa-mm-dd (comparação lexical funciona); vazio perde
+    if(!atual || String(r.data||'') > String(atual.data||'')){ ultima[p]=r; }
+  });
+  return Object.values(ultima).concat(semPlaca);
 }
 
 function _av2DDLabel(k){
@@ -6248,18 +6265,32 @@ function resetAv2Filtros(){
   renderAval2Shell();
 }
 
+// normaliza p/ busca: sem acento, caixa alta
+function _av2NormTxt(s){
+  return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().trim();
+}
+function filterAv2DD(k,txt){
+  const t=_av2NormTxt(txt);
+  document.querySelectorAll('.av2-opt-'+k).forEach(l=>{
+    l.style.display=(!t||_av2NormTxt(l.dataset.txt).indexOf(t)!==-1)?'flex':'none';
+  });
+}
 function _av2Dropdown(k,titulo){
   const fem=(k==='loja'||k==='marca'||k==='classif'||k==='finalidade');
   const todos=fem?'Todas':'Todos';
   const opts=_av2All[k].map(v=>
-    '<label style="display:flex;align-items:center;gap:10px;padding:7px 14px;cursor:pointer;border-bottom:1px solid #f5f4f0;font-size:11px" onmouseenter="this.style.background=\'#f5f4f0\'" onmouseleave="this.style.background=\'\'">'+
+    '<label class="av2-opt-'+k+'" data-txt="'+String(v).replace(/"/g,'&quot;')+'" style="display:flex;align-items:center;gap:10px;padding:7px 14px;cursor:pointer;border-bottom:1px solid #f5f4f0;font-size:11px" onmouseenter="this.style.background=\'#f5f4f0\'" onmouseleave="this.style.background=\'\'">'+
     '<input type="checkbox" class="av2-cb-'+k+'" data-v="'+String(v).replace(/"/g,'&quot;')+'" checked onchange="toggleAv2Item(\''+k+'\',\''+String(v).replace(/'/g,"\\'")+'\')">'+
     '<span style="flex:1">'+v+'</span></label>').join('');
   return '<div style="position:relative;display:inline-block" class="av2-dd-wrap">'+
     '<button onclick="toggleAv2DD(\''+k+'\')" style="display:flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--border);border-radius:3px;padding:6px 10px;font-size:11px;font-weight:600;cursor:pointer;justify-content:space-between">'+
       '<span>'+titulo+'</span><span id="av2Lbl_'+k+'" style="color:var(--muted);font-weight:400">'+_av2DDLabel(k)+'</span><span style="font-size:9px;color:var(--muted)">▼</span>'+
     '</button>'+
-    '<div id="av2DD_'+k+'" style="display:none;position:absolute;top:100%;left:0;z-index:999;background:#fff;border:1px solid var(--border);border-radius:3px;box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:250px;max-height:300px;overflow-y:auto;margin-top:2px">'+
+    '<div id="av2DD_'+k+'" style="display:none;position:absolute;top:100%;left:0;z-index:999;background:#fff;border:1px solid var(--border);border-radius:3px;box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:250px;max-height:320px;overflow-y:auto;margin-top:2px">'+
+      '<div style="padding:7px 10px;border-bottom:1px solid #e0dfd8;position:sticky;top:0;background:#fff;z-index:1">'+
+        '<input type="text" placeholder="Digitar para buscar..." oninput="filterAv2DD(\''+k+'\',this.value)" '+
+        'style="width:100%;box-sizing:border-box;border:1px solid var(--border2);border-radius:3px;padding:5px 8px;font-size:11px">'+
+      '</div>'+
       '<label style="display:flex;align-items:center;gap:10px;padding:8px 14px;cursor:pointer;border-bottom:1px solid #e0dfd8;font-size:12px;font-weight:600"><input type="checkbox" checked onchange="toggleAv2All(\''+k+'\',this.checked)"><span>'+todos+'</span></label>'+
       opts+
     '</div></div>';
@@ -6286,9 +6317,9 @@ function renderAval2Shell(){
       '<button onclick="resetAv2Filtros()" style="background:#fff;border:1px solid var(--border2);border-radius:3px;padding:6px 12px;font-size:11px;font-weight:600;cursor:pointer">Limpar filtros</button>'+
     '</div>'+
     '<div id="av2-kpis" style="display:flex;gap:12px;margin-bottom:18px;flex-wrap:wrap"></div>'+
-    '<div id="av2-praca" style="margin-bottom:18px"></div>'+
-    '<div id="av2-mix" style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:18px"></div>'+
-    '<div id="av2-rank" style="display:flex;gap:16px;flex-wrap:wrap"></div>';
+    '<div id="av2-praca" style="margin-bottom:20px"></div>'+
+    '<div id="av2-mix" style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px"></div>'+
+    '<div id="av2-rank" style="display:grid;grid-template-columns:1fr 1fr;gap:20px"></div>';
 
   setTimeout(()=>{ document.addEventListener('click',function(e){ if(e.target.closest('.av2-dd-wrap')) return; _AV2_DIMS.forEach(([k])=>{const dd=document.getElementById('av2DD_'+k);if(dd)dd.style.display='none';}); }); },100);
   renderAval2Content();
@@ -6339,26 +6370,48 @@ function _av2PracaTable(rowsFiltrados){
     }
   });
   const arr=Object.entries(porEstado).sort((a,b)=>b[1].aval-a[1].aval);
-  // totais
   const T={aval:0,acima:0,somaPct:0,nPct:0,somaVal:0,nVal:0};
   arr.forEach(([,P])=>{T.aval+=P.aval;T.acima+=P.acima;T.somaPct+=P.somaPct;T.nPct+=P.nPct;T.somaVal+=P.somaVal;T.nVal+=P.nVal;});
+
+  // guarda as placas por praça para o drill-down.
+  // Regra: praça normal = só placas acima do corte; "(sem estado)" = TODAS (diagnóstico).
+  window._av2PracaDrill={};
+  rows.forEach(r=>{
+    if(!(r.valorAval>=1000 && r.valorAval<=2000000)) return;
+    const e=r.estado||'(sem estado)';
+    const semEstado=(e==='(sem estado)');
+    let pct=null;
+    if(r.fipe>0){ const _p=r.valorAval/r.fipe; if(_p<=3) pct=_p; }
+    // praça normal: precisa de pct válido e acima do corte; sem estado: entra sempre
+    if(!semEstado){
+      if(pct===null || pct<=lim) return;
+    }
+    (window._av2PracaDrill[e]=window._av2PracaDrill[e]||[]).push({
+      placa:r.placa||'—', modelo:r.modelo||'—', pct:(pct===null?0:pct),
+      finalidade:r.finalidade||'—', classif:r.classif||'—', loja:r.loja||'—',
+      km:r.km||0, valorAval:r.valorAval
+    });
+  });
 
   const limLabel=(lim*100).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+'%';
   const TH='background:#1a2a48;color:#fff;padding:8px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap';
   const TD='padding:7px 12px;white-space:nowrap';
-  const fila=(nome,P,destaque)=>{
+  const fila=(nome,P,destaque,clicavel)=>{
     const pctMed=P.nPct?P.somaPct/P.nPct:0;
     const ticket=P.nVal?P.somaVal/P.nVal:0;
-    const st=destaque?'background:#111;color:#fff;font-weight:700':'border-bottom:1px solid var(--border)';
-    return '<tr style="'+st+'">'
-      +'<td style="'+TD+';font-weight:700">'+nome+'</td>'
+    const st=destaque?'background:#111;color:#fff;font-weight:700':'border-bottom:1px solid var(--border);cursor:pointer';
+    const onclick=(clicavel&&!destaque)?' onclick="toggleAv2Praca(\''+String(nome).replace(/'/g,"\\'")+'\')" onmouseenter="this.style.background=\'#eef1f7\'" onmouseleave="this.style.background=\'\'"':'';
+    const seta=(clicavel&&!destaque)?'<span id="av2arw_'+_av2Slug(nome)+'" style="display:inline-block;width:12px;color:#1a2a48;font-weight:700">+</span> ':'';
+    return '<tr style="'+st+'"'+onclick+'>'
+      +'<td style="'+TD+';font-weight:700">'+seta+nome+'</td>'
       +'<td style="'+TD+';text-align:right;font-weight:700">'+_av2N(P.aval)+'</td>'
       +'<td style="'+TD+';text-align:right">'+_av2N(P.acima)+'</td>'
       +'<td style="'+TD+';text-align:right;font-weight:700;color:'+(destaque?'#fff':'#c62828')+'">'+_av2Pct1(P.aval?P.acima/P.aval:0)+'</td>'
       +'<td style="'+TD+';text-align:right;font-weight:700">'+(pctMed>0?_av2Pct1(pctMed):'—')+'</td>'
       +'<td style="'+TD+';text-align:right">'+(P.somaVal>0?_av2RS(P.somaVal):'—')+'</td>'
       +'<td style="'+TD+';text-align:right">'+(ticket>0?_av2RS(ticket):'—')+'</td>'
-      +'</tr>';
+      +'</tr>'
+      +((clicavel&&!destaque)?'<tr id="av2drill_'+_av2Slug(nome)+'" style="display:none"><td colspan="7" style="padding:0;background:#f4f6fa"></td></tr>':'');
   };
   let h='<div style="border:1px solid var(--border);border-radius:3px;overflow:hidden">'
     +'<div style="background:#1e1e1e;color:#fff;padding:8px 14px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
@@ -6367,6 +6420,7 @@ function _av2PracaTable(rowsFiltrados){
       +'<input type="number" step="0.1" min="1" max="200" value="'+(lim*100).toFixed(1)+'" onchange="setAv2Limiar(this.value)" '
         +'style="width:64px;border:1px solid #555;border-radius:3px;padding:2px 6px;font-size:11px;font-weight:700;text-align:center;background:#2a2a2a;color:#fff">'
       +'<span style="font-weight:400;text-transform:none;font-size:10px;opacity:.8">%</span>'
+      +'<span style="font-weight:400;text-transform:none;font-size:10px;opacity:.6;margin-left:auto">clique numa praça para ver as placas acima do corte</span>'
     +'</div>'
     +'<div class="tbl-wrap"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr>'
       +'<th style="'+TH+';text-align:left">Praça</th>'
@@ -6377,27 +6431,93 @@ function _av2PracaTable(rowsFiltrados){
       +'<th style="'+TH+';text-align:right">Valor Avaliado (R$)</th>'
       +'<th style="'+TH+';text-align:right">Ticket Médio (R$)</th>'
     +'</tr></thead><tbody>'
-    +arr.map(([e,P])=>fila(e,P,false)).join('')
-    +fila('TOTAL ('+arr.length+' praças)',T,true)
+    +arr.map(([e,P])=>fila(e,P,false,true)).join('')
+    +fila('TOTAL ('+arr.length+' praças)',T,true,false)
     +'</tbody></table></div>'
     +'<div style="font-size:10px;color:var(--muted);padding:6px 12px">Somente finalidade SHOWROOM · Valores, Ticket e % Pago consideram apenas avaliações entre R$ 1 mil e R$ 2 milhões (com FIPE para o % Pago); valores fora dessa faixa são tratados como erro de dado.</div>'
     +'</div>';
   return h;
 }
 
+function _av2Slug(s){ return String(s).replace(/[^A-Za-z0-9]/g,'_'); }
+
+// estado de ordenação do drill de cada praça
+window._av2DrillSort = window._av2DrillSort || {};
+function toggleAv2Praca(nome){
+  const slug=_av2Slug(nome);
+  const tr=document.getElementById('av2drill_'+slug);
+  const arw=document.getElementById('av2arw_'+slug);
+  if(!tr) return;
+  if(tr.style.display==='none'){
+    tr.style.display='';
+    tr.firstChild.innerHTML=_av2DrillHtml(nome);
+    if(arw) arw.textContent='−';
+  } else {
+    tr.style.display='none';
+    if(arw) arw.textContent='+';
+  }
+}
+function sortAv2Drill(nome,campo){
+  const slug=_av2Slug(nome);
+  const cur=window._av2DrillSort[slug]||{};
+  const dir=(cur.campo===campo && cur.dir==='asc')?'desc':'asc';
+  window._av2DrillSort[slug]={campo:campo,dir:dir};
+  const tr=document.getElementById('av2drill_'+slug);
+  if(tr && tr.style.display!=='none') tr.firstChild.innerHTML=_av2DrillHtml(nome);
+}
+function _av2DrillHtml(nome){
+  const slug=_av2Slug(nome);
+  let list=(window._av2PracaDrill&&window._av2PracaDrill[nome])?window._av2PracaDrill[nome].slice():[];
+  const s=window._av2DrillSort[slug]||{campo:'pct',dir:'desc'};
+  const mul=(s.dir==='asc')?1:-1;
+  list.sort((a,b)=>{
+    let va=a[s.campo], vb=b[s.campo];
+    if(typeof va==='string'){ va=va.toUpperCase(); vb=String(vb).toUpperCase(); return va<vb?-1*mul:va>vb?1*mul:0; }
+    return (va-vb)*mul;
+  });
+  const arrow=c=> (s.campo===c?(s.dir==='asc'?' ▲':' ▼'):' ⇅');
+  const TH='background:#2a3a58;color:#fff;padding:6px 10px;font-size:10px;font-weight:700;text-transform:uppercase;cursor:pointer;white-space:nowrap;user-select:none';
+  const TD='padding:5px 10px;font-size:11px;border-bottom:1px solid #e2e6ee;white-space:nowrap';
+  const th=(rot,campo,al)=>'<th style="'+TH+';text-align:'+al+'" onclick="sortAv2Drill(\''+String(nome).replace(/'/g,"\\'")+'\',\''+campo+'\')">'+rot+arrow(campo)+'</th>';
+  let h='<div style="padding:8px 14px"><table style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #d5dae6"><thead><tr>'
+    +th('Placa','placa','left')
+    +th('Modelo','modelo','left')
+    +th('% Pago','pct','right')
+    +th('KM','km','right')
+    +th('Finalidade','finalidade','left')
+    +th('Classificação','classif','left')
+    +th('Loja','loja','left')
+    +'</tr></thead><tbody>';
+  if(!list.length){ h+='<tr><td colspan="7" style="'+TD+';color:var(--muted)">Nenhuma placa nesta praça.</td></tr>'; }
+  list.forEach((r,i)=>{
+    h+='<tr style="background:'+(i%2===0?'#fff':'#f6f8fc')+'">'
+      +'<td style="'+TD+';font-weight:700">'+r.placa+'</td>'
+      +'<td style="'+TD+'">'+r.modelo+'</td>'
+      +'<td style="'+TD+';text-align:right;font-weight:700;color:#1a7a4c">'+_av2Pct1(r.pct)+'</td>'
+      +'<td style="'+TD+';text-align:right">'+(r.km>0?_av2N(r.km)+' km':'—')+'</td>'
+      +'<td style="'+TD+'">'+r.finalidade+'</td>'
+      +'<td style="'+TD+'">'+r.classif+'</td>'
+      +'<td style="'+TD+'">'+r.loja+'</td>'
+      +'</tr>';
+  });
+  h+='</tbody></table></div>';
+  return h;
+}
+
 function renderAval2Content(){
-  const rows=_av2Filtered();
+  const rowsAll=_av2Filtered();                       // tudo (para contar as < R$ 1 mil)
+  const abaixo1k=rowsAll.filter(r=>r.valorAval<1000).length;
+  const rows=rowsAll.filter(r=>r.valorAval>=1000);    // VÁLIDAS: base de TODO o resto (total, %, mix, rankings, praça)
   const kpi=document.getElementById('av2-kpis');
   const mix=document.getElementById('av2-mix');
   const praca=document.getElementById('av2-praca');
   const rank=document.getElementById('av2-rank');
   if(!mix) return;
-  if(!rows.length){ if(kpi)kpi.innerHTML=''; if(praca)praca.innerHTML=''; mix.innerHTML='<div style="padding:1rem;color:var(--muted)">Sem avaliações para os filtros.</div>'; if(rank)rank.innerHTML=''; return; }
+  if(!rows.length){ if(kpi)kpi.innerHTML=''; if(praca)praca.innerHTML=''; mix.innerHTML='<div style="padding:1rem;color:var(--muted)">Sem avaliações (≥ R$ 1 mil) para os filtros.</div>'; if(rank)rank.innerHTML=''; return; }
   if(praca) praca.innerHTML=_av2PracaTable(rows);
 
-  const total=rows.length;
-  const abaixo1k=rows.filter(r=>r.valorAval<1000).length;
-  const validas=rows.filter(r=>r.valorAval>=1000 && r.valorAval<=2000000);
+  const total=rows.length;                            // total já SEM as < R$ 1 mil
+  const validas=rows.filter(r=>r.valorAval<=2000000); // teto de sanidade p/ valores
   const ticket=validas.length?validas.reduce((s,r)=>s+r.valorAval,0)/validas.length:0;
   const comFipe=validas.filter(r=>r.fipe>0 && (r.valorAval/r.fipe)<=3);
   const pctPago=comFipe.length?comFipe.reduce((s,r)=>s+r.valorAval/r.fipe,0)/comFipe.length:0;
@@ -6408,48 +6528,85 @@ function renderAval2Content(){
 
   const kCard=(l,v,c,tt)=>'<div style="background:#fff;border:1px solid var(--border);border-left:3px solid '+c+';border-radius:3px;padding:.6rem 1.1rem;min-width:125px"'+(tt?' title="'+tt.replace(/"/g,'&quot;')+'"':'')+'><p style="font-size:10px;color:var(--muted);margin:0 0 2px;text-transform:uppercase;letter-spacing:.5px;font-weight:600">'+l+'</p><p style="font-size:19px;font-weight:700;margin:0">'+v+'</p></div>';
   if(kpi) kpi.innerHTML=
-    kCard('Total Avaliações',_av2N(total),'#1a3c8a','Total de linhas (Data de Criação — coluna E)')+
-    kCard('% Pago',pctPago>0?_av2Pct1(pctPago):'—','#c62828','Média de Valor Avaliado (U) ÷ FIPE (AE), só avaliações ≥ R$ 1 mil com FIPE')+
-    kCard('Ticket Médio',ticket>0?_av2RS(ticket):'—','#1a7a4c','Média do Valor Avaliado (só ≥ R$ 1 mil)')+
-    kCard('Abaixo de R$ 1 mil',_av2N(abaixo1k)+' ('+_av2Pct(abaixo1k,total)+'%)','#777','Avaliações com Valor Avaliado (U) < R$ 1.000 — mostradas à parte, fora do % Pago e do Ticket')+
+    kCard('Total Avaliações',_av2N(total),'#1a3c8a','Total de avaliações VÁLIDAS (≥ R$ 1 mil). As abaixo de R$ 1 mil não entram aqui.')+
+    kCard('% Pago',pctPago>0?_av2Pct1(pctPago):'—','#c62828','Média de Valor Avaliado (U) ÷ FIPE (AE), avaliações ≥ R$ 1 mil com FIPE')+
+    kCard('Ticket Médio',ticket>0?_av2RS(ticket):'—','#1a7a4c','Média do Valor Avaliado (≥ R$ 1 mil)')+
+    kCard('Abaixo de R$ 1 mil',_av2N(abaixo1k),'#777','Avaliações com Valor Avaliado (U) < R$ 1.000 — contadas SÓ aqui; não entram no Total nem em nenhum outro cálculo')+
     kCard('SHOWROOM',_av2N(showroom)+' ('+_av2Pct(showroom,total)+'%)','#6a1a7a')+
     kCard('REPASSE',_av2N(repasse)+' ('+_av2Pct(repasse,total)+'%)','#c8921a')+
     kCard('Avaliadores',_av2N(avaliadores),'#1a6a7a')+
     kCard('Lojas',_av2N(lojas),'#555');
 
-  const linha=(d,i,max,cor,total)=>{
+  // ── Cards no estilo "Tempo de Avaliação": título preto, ranking numerado, tabela limpa ──
+  const _cardLinha=(d,i,total)=>{
     const tk=d.nAval?d.somaAval/d.nAval:0;
     const pp=d.nPct?d.somaPct/d.nPct:0;
-    return '<tr style="background:'+(i%2===0?'#fff':'#fafaf8')+';border-bottom:1px solid var(--border)">'+
-      '<td style="padding:6px 12px;font-weight:600">'+d.nome+'<div style="background:#e8e7e0;border-radius:2px;height:4px;width:110px;overflow:hidden;margin-top:3px"><div style="width:'+Math.round(d.qtde/max*110)+'px;background:'+cor+';height:100%"></div></div></td>'+
-      '<td style="padding:6px 12px;text-align:right;font-weight:700">'+_av2N(d.qtde)+'</td>'+
-      '<td style="padding:6px 12px;text-align:right;color:var(--muted)">'+_av2Pct(d.qtde,total)+'%</td>'+
-      '<td style="padding:6px 12px;text-align:right">'+(tk>0?_av2RS(tk):'—')+'</td>'+
-      '<td style="padding:6px 12px;text-align:right;font-weight:700;color:'+(pp>0?(pp>0.9?'#c62828':pp>0.8?'#c8921a':'#1a7a4c'):'#ccc')+'">'+(pp>0?_av2Pct1(pp):'—')+'</td></tr>';
+    return '<tr style="background:'+(i%2===0?'#fff':'#f7f7f2')+';border-bottom:1px solid #e8e8e0">'+
+      '<td style="padding:8px 8px;text-align:center;font-weight:700;color:'+(i<3?'#c8921a':'#999')+'">'+(i+1)+'</td>'+
+      '<td style="padding:8px 10px;font-weight:600">'+d.nome+'</td>'+
+      '<td style="padding:8px 10px;text-align:right;font-weight:700">'+_av2N(d.qtde)+'</td>'+
+      '<td style="padding:8px 10px;text-align:right;color:var(--muted)">'+_av2Pct(d.qtde,total)+'%</td>'+
+      '<td style="padding:8px 10px;text-align:right">'+(tk>0?_av2RS(tk):'—')+'</td>'+
+      '<td style="padding:8px 10px;text-align:right;font-weight:700;color:'+(pp>0?(pp>0.9?'#c62828':pp>0.8?'#c8921a':'#1a7a4c'):'#ccc')+'">'+(pp>0?_av2Pct1(pp):'—')+'</td></tr>';
   };
-  const cab=(rotulo)=>'<tr style="background:#e0dfd8;font-weight:700"><td style="padding:4px 12px">'+rotulo+'</td><td style="padding:4px 12px;text-align:right">Qtde</td><td style="padding:4px 12px;text-align:right">%</td><td style="padding:4px 12px;text-align:right">Ticket Médio</td><td style="padding:4px 12px;text-align:right" title="Valor Avaliado ÷ FIPE">% Pago</td></tr>';
+  // estado de ordenação de cada card (por título)
+  window._av2CardSort = window._av2CardSort || {};
+  window._av2CardMeta = window._av2CardMeta || {};
+  const _cardBlock=(titulo,rotulo,key,limit)=>{
+    let arr=_av2GroupBy(rows,key);
+    if(!arr.length) return '';
+    // guarda metadados p/ re-render ao ordenar
+    window._av2CardMeta[titulo]={rotulo:rotulo,key:key,limit:limit};
+    const slug=_av2Slug(titulo);
+    const s=window._av2CardSort[titulo]||{campo:'qtde',dir:'desc'};
+    const mul=(s.dir==='asc')?1:-1;
+    const val=(d,campo)=>{
+      if(campo==='nome') return String(d.nome).toUpperCase();
+      if(campo==='qtde') return d.qtde;
+      if(campo==='pct')  return d.qtde; // % é proporcional à qtde
+      if(campo==='tk')   return d.nAval?d.somaAval/d.nAval:0;
+      if(campo==='pp')   return d.nPct?d.somaPct/d.nPct:0;
+      return 0;
+    };
+    arr.sort((a,b)=>{ let va=val(a,s.campo),vb=val(b,s.campo);
+      if(typeof va==='string'){ return va<vb?-1*mul:va>vb?1*mul:0; } return (va-vb)*mul; });
+    if(limit) arr=arr.slice(0,limit);
+    const total2=total;
+    const arrow=c=> (s.campo===c?(s.dir==='asc'?' ▲':' ▼'):' ⇅');
+    const THs='padding:8px 10px;font-size:11px;text-transform:uppercase;cursor:pointer;user-select:none';
+    const th=(rot,campo,al)=>'<th style="'+THs+';text-align:'+al+'" onclick="sortAv2Card(\''+slug+'\',\''+campo+'\')">'+rot+arrow(campo)+'</th>';
+    return '<div id="av2card_'+slug+'" style="border:1px solid #ccc;border-radius:3px;overflow:hidden;font-size:12px;background:#fff">'+
+      '<div style="background:#111;color:#fff;padding:10px 14px;font-weight:700;font-size:13px;letter-spacing:.5px;text-transform:uppercase">'+titulo+'</div>'+
+      '<table style="width:100%;border-collapse:collapse"><thead><tr style="background:#fafafa;border-bottom:2px solid #222">'+
+        '<th style="padding:8px 8px;text-align:center;width:34px;font-size:11px">#</th>'+
+        th(rotulo,'nome','left')+
+        th('Qtd.','qtde','right')+
+        '<th style="padding:8px 10px;text-align:right;font-size:11px;text-transform:uppercase">%</th>'+
+        th('Ticket Médio','tk','right')+
+        th('% Pago','pp','right')+
+      '</tr></thead><tbody>'+
+      arr.map((d,i)=>_cardLinha(d,i,total2)).join('')+
+      '</tbody></table></div>';
+  };
+  window._av2CardTitles = ['Classificação','Finalidade','Tipo de Avaliação','Top 10 — Marcas mais avaliadas','Top 10 — Modelos mais avaliados','Top 10 — Por Loja','Top 10 — Por Avaliador'];
+  mix.innerHTML = _cardBlock('Classificação','Classificação','classif',0)
+                + _cardBlock('Finalidade','Finalidade','finalidade',0)
+                + _cardBlock('Tipo de Avaliação','Tipo','tipo',0);
 
-  const mixBlock=(titulo,key,cor)=>{
-    const arr=_av2GroupBy(rows,key);
-    const max=arr.length?arr[0].qtde:1;
-    return '<div style="flex:1;min-width:300px;border:1px solid var(--border);border-radius:3px;overflow:hidden">'+
-      '<div style="background:#1e1e1e;color:#fff;padding:8px 14px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px">'+titulo+'</div>'+
-      '<table style="width:100%;border-collapse:collapse;font-size:12px">'+cab(titulo)+
-      arr.map((d,i)=>linha(d,i,max,cor,total)).join('')+
-      '</table></div>';
-  };
-  mix.innerHTML = mixBlock('Classificação','classif','#1a3c8a') + mixBlock('Finalidade','finalidade','#1a7a4c') + mixBlock('Tipo de Avaliação','tipo','#6a1a7a');
+  if(rank) rank.innerHTML = _cardBlock('Top 10 — Marcas mais avaliadas','Marca','marca',10)
+                          + _cardBlock('Top 10 — Modelos mais avaliados','Modelo','modelo',10)
+                          + _cardBlock('Top 10 — Por Loja','Loja','loja',10)
+                          + _cardBlock('Top 10 — Por Avaliador','Avaliador','avaliador',10);
+}
 
-  const rankBlock=(titulo,key,cor,limit)=>{
-    const arr=_av2GroupBy(rows,key).slice(0,limit);
-    const max=arr.length?arr[0].qtde:1;
-    return '<div style="flex:1;min-width:340px;border:1px solid var(--border);border-radius:3px;overflow:hidden">'+
-      '<div style="background:#1e1e1e;color:#fff;padding:8px 14px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px">'+titulo+'</div>'+
-      '<table style="width:100%;border-collapse:collapse;font-size:12px">'+cab('Nome')+
-      arr.map((d,i)=>linha(d,i,max,cor,total)).join('')+
-      '</table></div>';
-  };
-  if(rank) rank.innerHTML = rankBlock('Marcas mais avaliadas','marca','#1a3c8a',15) + rankBlock('Modelos mais avaliados','modelo','#1a7a4c',15) + rankBlock('Por Loja','loja','#c8921a',15) + rankBlock('Por Avaliador','avaliador','#6a1a7a',15);
+// re-render de um card ao clicar no cabeçalho (ordena)
+function sortAv2Card(slug,campo){
+  const titulo=(window._av2CardTitles||[]).find(t=>_av2Slug(t)===slug);
+  if(!titulo) return;
+  const cur=window._av2CardSort[titulo]||{};
+  const dir=(cur.campo===campo && cur.dir==='asc')?'desc':'asc';
+  window._av2CardSort[titulo]={campo:campo,dir:dir};
+  renderAval2Content(); // re-renderiza tudo com a nova ordenação (barato)
 }
 
 // ── ABAS ROLÁVEIS (telas menores) ─────────────────────────────────────────────
