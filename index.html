@@ -6318,8 +6318,10 @@ function renderAval2Shell(){
     '</div>'+
     '<div id="av2-kpis" style="display:flex;gap:12px;margin-bottom:18px;flex-wrap:wrap"></div>'+
     '<div id="av2-praca" style="margin-bottom:20px"></div>'+
-    '<div id="av2-mix" style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px"></div>'+
-    '<div id="av2-rank" style="display:grid;grid-template-columns:1fr 1fr;gap:20px"></div>';
+    '<div id="av2-mix" style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:0"></div>'+
+    '<div id="av2-mixdrill" style="margin:0 0 20px"></div>'+
+    '<div id="av2-rank" style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:0"></div>'+
+    '<div id="av2-rankdrill" style="margin:0"></div>';
 
   setTimeout(()=>{ document.addEventListener('click',function(e){ if(e.target.closest('.av2-dd-wrap')) return; _AV2_DIMS.forEach(([k])=>{const dd=document.getElementById('av2DD_'+k);if(dd)dd.style.display='none';}); }); },100);
   renderAval2Content();
@@ -6389,7 +6391,7 @@ function _av2PracaTable(rowsFiltrados){
     (window._av2PracaDrill[e]=window._av2PracaDrill[e]||[]).push({
       placa:r.placa||'—', modelo:r.modelo||'—', pct:(pct===null?0:pct),
       finalidade:r.finalidade||'—', classif:r.classif||'—', loja:r.loja||'—',
-      km:r.km||0, valorAval:r.valorAval
+      km:r.km||0, valorAval:r.valorAval, fipe:r.fipe||0
     });
   });
 
@@ -6479,21 +6481,25 @@ function _av2DrillHtml(nome){
   const TH='background:#2a3a58;color:#fff;padding:6px 10px;font-size:10px;font-weight:700;text-transform:uppercase;cursor:pointer;white-space:nowrap;user-select:none';
   const TD='padding:5px 10px;font-size:11px;border-bottom:1px solid #e2e6ee;white-space:nowrap';
   const th=(rot,campo,al)=>'<th style="'+TH+';text-align:'+al+'" onclick="sortAv2Drill(\''+String(nome).replace(/'/g,"\\'")+'\',\''+campo+'\')">'+rot+arrow(campo)+'</th>';
-  let h='<div style="padding:8px 14px"><table style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #d5dae6"><thead><tr>'
+  let h='<div style="padding:8px 14px;overflow-x:auto"><table style="width:100%;min-width:1000px;border-collapse:collapse;background:#fff;border:1px solid #d5dae6"><thead><tr>'
     +th('Placa','placa','left')
     +th('Modelo','modelo','left')
     +th('% Pago','pct','right')
+    +th('Valor Aval.','valorAval','right')
+    +th('FIPE','fipe','right')
     +th('KM','km','right')
     +th('Finalidade','finalidade','left')
     +th('Classificação','classif','left')
     +th('Loja','loja','left')
     +'</tr></thead><tbody>';
-  if(!list.length){ h+='<tr><td colspan="7" style="'+TD+';color:var(--muted)">Nenhuma placa nesta praça.</td></tr>'; }
+  if(!list.length){ h+='<tr><td colspan="9" style="'+TD+';color:var(--muted)">Nenhuma placa nesta praça.</td></tr>'; }
   list.forEach((r,i)=>{
     h+='<tr style="background:'+(i%2===0?'#fff':'#f6f8fc')+'">'
       +'<td style="'+TD+';font-weight:700">'+r.placa+'</td>'
       +'<td style="'+TD+'">'+r.modelo+'</td>'
       +'<td style="'+TD+';text-align:right;font-weight:700;color:#1a7a4c">'+_av2Pct1(r.pct)+'</td>'
+      +'<td style="'+TD+';text-align:right">'+(r.valorAval>0?_av2RS(r.valorAval):'—')+'</td>'
+      +'<td style="'+TD+';text-align:right;color:var(--muted)">'+(r.fipe>0?_av2RS(r.fipe):'—')+'</td>'
       +'<td style="'+TD+';text-align:right">'+(r.km>0?_av2N(r.km)+' km':'—')+'</td>'
       +'<td style="'+TD+'">'+r.finalidade+'</td>'
       +'<td style="'+TD+'">'+r.classif+'</td>'
@@ -6538,12 +6544,16 @@ function renderAval2Content(){
     kCard('Lojas',_av2N(lojas),'#555');
 
   // ── Cards no estilo "Tempo de Avaliação": título preto, ranking numerado, tabela limpa ──
-  const _cardLinha=(d,i,total)=>{
+  window._av2CardRows = rows; // base p/ o drill dos cards (respeita filtros)
+  const _cardLinha=(d,i,total,key,slug,grid)=>{
     const tk=d.nAval?d.somaAval/d.nAval:0;
     const pp=d.nPct?d.somaPct/d.nPct:0;
-    return '<tr style="background:'+(i%2===0?'#fff':'#f7f7f2')+';border-bottom:1px solid #e8e8e0">'+
+    const rid=slug+'__'+_av2Slug(d.nome);
+    return '<tr style="background:'+(i%2===0?'#fff':'#f7f7f2')+';border-bottom:1px solid #e8e8e0;cursor:pointer" '+
+      'onclick="toggleAv2CardDrill(\''+key+'\',\''+String(d.nome).replace(/'/g,"\\'")+'\',\''+rid+'\',\''+grid+'\')" '+
+      'onmouseenter="this.style.background=\'#eef1f7\'" onmouseleave="this.style.background=\''+(i%2===0?'#fff':'#f7f7f2')+'\'">'+
       '<td style="padding:8px 8px;text-align:center;font-weight:700;color:'+(i<3?'#c8921a':'#999')+'">'+(i+1)+'</td>'+
-      '<td style="padding:8px 10px;font-weight:600">'+d.nome+'</td>'+
+      '<td style="padding:8px 10px;font-weight:600"><span id="av2carw_'+rid+'" style="display:inline-block;width:12px;color:#1a2a48;font-weight:700">+</span> '+d.nome+'</td>'+
       '<td style="padding:8px 10px;text-align:right;font-weight:700">'+_av2N(d.qtde)+'</td>'+
       '<td style="padding:8px 10px;text-align:right;color:var(--muted)">'+_av2Pct(d.qtde,total)+'%</td>'+
       '<td style="padding:8px 10px;text-align:right">'+(tk>0?_av2RS(tk):'—')+'</td>'+
@@ -6552,7 +6562,7 @@ function renderAval2Content(){
   // estado de ordenação de cada card (por título)
   window._av2CardSort = window._av2CardSort || {};
   window._av2CardMeta = window._av2CardMeta || {};
-  const _cardBlock=(titulo,rotulo,key,limit)=>{
+  const _cardBlock=(titulo,rotulo,key,limit,grid)=>{
     let arr=_av2GroupBy(rows,key);
     if(!arr.length) return '';
     // guarda metadados p/ re-render ao ordenar
@@ -6575,7 +6585,7 @@ function renderAval2Content(){
     const arrow=c=> (s.campo===c?(s.dir==='asc'?' ▲':' ▼'):' ⇅');
     const THs='padding:8px 10px;font-size:11px;text-transform:uppercase;cursor:pointer;user-select:none';
     const th=(rot,campo,al)=>'<th style="'+THs+';text-align:'+al+'" onclick="sortAv2Card(\''+slug+'\',\''+campo+'\')">'+rot+arrow(campo)+'</th>';
-    return '<div id="av2card_'+slug+'" style="border:1px solid #ccc;border-radius:3px;overflow:hidden;font-size:12px;background:#fff">'+
+    return '<div id="av2card_'+slug+'" style="border:1px solid #ccc;border-radius:3px;overflow:hidden;font-size:12px;background:#fff;min-width:0">'+
       '<div style="background:#111;color:#fff;padding:10px 14px;font-weight:700;font-size:13px;letter-spacing:.5px;text-transform:uppercase">'+titulo+'</div>'+
       '<table style="width:100%;border-collapse:collapse"><thead><tr style="background:#fafafa;border-bottom:2px solid #222">'+
         '<th style="padding:8px 8px;text-align:center;width:34px;font-size:11px">#</th>'+
@@ -6585,18 +6595,21 @@ function renderAval2Content(){
         th('Ticket Médio','tk','right')+
         th('% Pago','pp','right')+
       '</tr></thead><tbody>'+
-      arr.map((d,i)=>_cardLinha(d,i,total2)).join('')+
+      arr.map((d,i)=>_cardLinha(d,i,total2,key,slug,grid)).join('')+
       '</tbody></table></div>';
   };
   window._av2CardTitles = ['Classificação','Finalidade','Tipo de Avaliação','Top 10 — Marcas mais avaliadas','Top 10 — Modelos mais avaliados','Top 10 — Por Loja','Top 10 — Por Avaliador'];
-  mix.innerHTML = _cardBlock('Classificação','Classificação','classif',0)
-                + _cardBlock('Finalidade','Finalidade','finalidade',0)
-                + _cardBlock('Tipo de Avaliação','Tipo','tipo',0);
+  mix.innerHTML = _cardBlock('Classificação','Classificação','classif',0,'mix')
+                + _cardBlock('Finalidade','Finalidade','finalidade',0,'mix')
+                + _cardBlock('Tipo de Avaliação','Tipo','tipo',0,'mix');
 
-  if(rank) rank.innerHTML = _cardBlock('Top 10 — Marcas mais avaliadas','Marca','marca',10)
-                          + _cardBlock('Top 10 — Modelos mais avaliados','Modelo','modelo',10)
-                          + _cardBlock('Top 10 — Por Loja','Loja','loja',10)
-                          + _cardBlock('Top 10 — Por Avaliador','Avaliador','avaliador',10);
+  if(rank) rank.innerHTML = _cardBlock('Top 10 — Marcas mais avaliadas','Marca','marca',10,'rank')
+                          + _cardBlock('Top 10 — Modelos mais avaliados','Modelo','modelo',10,'rank')
+                          + _cardBlock('Top 10 — Por Loja','Loja','loja',10,'rank')
+                          + _cardBlock('Top 10 — Por Avaliador','Avaliador','avaliador',10,'rank');
+  // fecha drills abertos ao re-render
+  var _md=document.getElementById('av2-mixdrill'); if(_md) _md.innerHTML='';
+  var _rd=document.getElementById('av2-rankdrill'); if(_rd) _rd.innerHTML='';
 }
 
 // re-render de um card ao clicar no cabeçalho (ordena)
@@ -6607,6 +6620,77 @@ function sortAv2Card(slug,campo){
   const dir=(cur.campo===campo && cur.dir==='asc')?'desc':'asc';
   window._av2CardSort[titulo]={campo:campo,dir:dir};
   renderAval2Content(); // re-renderiza tudo com a nova ordenação (barato)
+}
+
+// ── Segunda camada dos cards de baixo: placas da categoria clicada ──
+window._av2CardDrillSort = window._av2CardDrillSort || {};
+function toggleAv2CardDrill(key,nome,rid,grid){
+  const cont=document.getElementById('av2-'+grid+'drill');
+  if(!cont) return;
+  // limpa setas de todos os cards do mesmo grid
+  const jaAberto = (cont.dataset.rid===rid && cont.innerHTML!=='');
+  document.querySelectorAll('[id^="av2carw_"]').forEach(s=>s.textContent='+');
+  if(jaAberto){
+    cont.innerHTML=''; cont.dataset.rid='';
+    return;
+  }
+  cont.dataset.rid=rid;
+  cont.innerHTML=_av2CardDrillHtml(key,nome,rid);
+  const arw=document.getElementById('av2carw_'+rid); if(arw) arw.textContent='−';
+  cont.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+function sortAv2CardDrill(key,nome,rid,campo){
+  const cur=window._av2CardDrillSort[rid]||{};
+  const dir=(cur.campo===campo && cur.dir==='asc')?'desc':'asc';
+  window._av2CardDrillSort[rid]={campo:campo,dir:dir};
+  // acha o container que está mostrando este rid
+  ['mix','rank'].forEach(g=>{ const c=document.getElementById('av2-'+g+'drill'); if(c && c.dataset.rid===rid) c.innerHTML=_av2CardDrillHtml(key,nome,rid); });
+}
+function _av2CardDrillHtml(key,nome,rid){
+  const base=window._av2CardRows||[];
+  // placas da categoria (respeita filtros/dedup, pois _av2CardRows já é o rows filtrado)
+  let list=base.filter(r=>String(r[key])===String(nome)).map(r=>({
+    placa:r.placa||'—', modelo:r.modelo||'—',
+    pct:(r.fipe>0 && (r.valorAval/r.fipe)<=3)?(r.valorAval/r.fipe):0,
+    km:r.km||0, finalidade:r.finalidade||'—', classif:r.classif||'—', loja:r.loja||'—',
+    valorAval:r.valorAval, fipe:r.fipe||0
+  }));
+  const s=window._av2CardDrillSort[rid]||{campo:'pct',dir:'desc'};
+  const mul=(s.dir==='asc')?1:-1;
+  list.sort((a,b)=>{ let va=a[s.campo],vb=b[s.campo];
+    if(typeof va==='string'){ va=va.toUpperCase(); vb=String(vb).toUpperCase(); return va<vb?-1*mul:va>vb?1*mul:0; }
+    return (va-vb)*mul; });
+  const arrow=c=> (s.campo===c?(s.dir==='asc'?' ▲':' ▼'):' ⇅');
+  const TH='background:#2a3a58;color:#fff;padding:7px 12px;font-size:10px;font-weight:700;text-transform:uppercase;cursor:pointer;white-space:nowrap;user-select:none';
+  const TD='padding:6px 12px;font-size:12px;border-bottom:1px solid #e2e6ee;white-space:nowrap';
+  const th=(rot,campo,al)=>'<th style="'+TH+';text-align:'+al+'" onclick="sortAv2CardDrill(\''+key+'\',\''+String(nome).replace(/'/g,"\\'")+'\',\''+rid+'\',\''+campo+'\')">'+rot+arrow(campo)+'</th>';
+  let h='<div style="border:1px solid #ccc;border-radius:3px;overflow:hidden;background:#fff">'
+    +'<div style="background:#1a2a48;color:#fff;padding:9px 14px;font-size:12px;font-weight:700;display:flex;align-items:center;gap:10px">'
+      +'<span>Placas — '+nome+'</span>'
+      +'<span style="font-weight:400;opacity:.8;font-size:11px">('+list.length+')</span>'
+      +'<button onclick="toggleAv2CardDrill(\''+key+'\',\''+String(nome).replace(/'/g,"\\'")+'\',\''+rid+'\',\''+(rid.indexOf("Top_10")!==-1?"rank":"mix")+'\')" style="margin-left:auto;background:transparent;border:1px solid #fff5;color:#fff;border-radius:3px;padding:2px 10px;font-size:11px;cursor:pointer">Fechar ✕</button>'
+    +'</div>'
+    +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;background:#fff"><thead><tr>'
+    +th('Placa','placa','left')+th('Modelo','modelo','left')+th('% Pago','pct','right')
+    +th('Valor Aval.','valorAval','right')+th('FIPE','fipe','right')
+    +th('KM','km','right')+th('Finalidade','finalidade','left')+th('Classificação','classif','left')+th('Loja','loja','left')
+    +'</tr></thead><tbody>';
+  if(!list.length){ h+='<tr><td colspan="9" style="'+TD+';color:var(--muted)">Nenhuma placa nesta categoria.</td></tr>'; }
+  list.forEach((r,i)=>{
+    h+='<tr style="background:'+(i%2===0?'#fff':'#f6f8fc')+'">'
+      +'<td style="'+TD+';font-weight:700">'+r.placa+'</td>'
+      +'<td style="'+TD+'">'+r.modelo+'</td>'
+      +'<td style="'+TD+';text-align:right;font-weight:700;color:'+(r.pct>0?'#1a7a4c':'#ccc')+'">'+(r.pct>0?_av2Pct1(r.pct):'—')+'</td>'
+      +'<td style="'+TD+';text-align:right">'+(r.valorAval>0?_av2RS(r.valorAval):'—')+'</td>'
+      +'<td style="'+TD+';text-align:right;color:var(--muted)">'+(r.fipe>0?_av2RS(r.fipe):'—')+'</td>'
+      +'<td style="'+TD+';text-align:right">'+(r.km>0?_av2N(r.km)+' km':'—')+'</td>'
+      +'<td style="'+TD+'">'+r.finalidade+'</td>'
+      +'<td style="'+TD+'">'+r.classif+'</td>'
+      +'<td style="'+TD+'">'+r.loja+'</td>'
+      +'</tr>';
+  });
+  h+='</tbody></table></div></div>';
+  return h;
 }
 
 // ── ABAS ROLÁVEIS (telas menores) ─────────────────────────────────────────────
