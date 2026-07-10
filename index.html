@@ -498,6 +498,23 @@ th:hover .col-rh,.col-rh:hover,.col-rh.rh-drag{opacity:1;background:rgba(255,255
   </div>
 </div>
 
+<!-- TEMPO DE ESTOQUE PAGE -->
+<div id="pageTempoEstoque" style="display:none">
+  <div style="background:#fff;border-bottom:1px solid var(--border);padding:6px 20px;display:flex;align-items:center;gap:8px">
+    <span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Aba:</span>
+    <select class="sheet-select" id="tempoEstoqueSheetSelect" onchange="loadTempoEstoqueSheet(this.value)" style="min-width:200px"></select>
+  </div>
+  <div class="tab-bar" style="background:#fff;border-bottom:2px solid #111;padding:0 20px;display:flex;gap:4px">
+    <button class="tab-btn active" id="tetab-btn-geral" onclick="showTempoEstTab('geral')">Geral</button>
+    <button class="tab-btn" id="tetab-btn-bace" onclick="showTempoEstTab('bace')">Bahia e Ceará</button>
+    <button class="tab-btn" id="tetab-btn-pepb" onclick="showTempoEstTab('pepb')">Pernambuco e Paraíba</button>
+  </div>
+  <div id="tempo-est-tab-geral" style="padding:12px 20px 60px"><div style="padding:2rem;color:var(--muted)">Configure a URL da API de Estoque nas configurações (⚙) para carregar esta aba.</div></div>
+  <div id="tempo-est-tab-bace" style="padding:12px 20px 60px;display:none"></div>
+  <div id="tempo-est-tab-pepb" style="padding:12px 20px 60px;display:none"></div>
+  <div id="tempo-estoque-body" style="display:none"></div>
+</div>
+
 <!-- AGING ESTOQUE PAGE -->
 <div id="pageAgingEstoque" style="display:none">
   <div style="background:#fff;border-bottom:1px solid var(--border);padding:6px 20px;display:flex;align-items:center;gap:8px">
@@ -609,6 +626,7 @@ th:hover .col-rh,.col-rh:hover,.col-rh.rh-drag{opacity:1;background:rgba(255,255
   <div class="ptab active" id="ptVendas" data-page="vendas" draggable="true">Vendas por Modelo</div>
   <div class="ptab" id="ptAging" data-page="aging" draggable="true">Aging Vendas</div>
   <div class="ptab" id="ptGiro" data-page="giro" draggable="true">Giro de Estoque</div>
+  <div class="ptab" id="ptTempoEstoque" data-page="tempo-estoque" draggable="true">Tempo de Estoque</div>
   <div class="ptab" id="ptCritico" data-page="critico" draggable="true">Estoque Crítico</div>
   <div class="ptab" id="ptAval" data-page="aval" draggable="true">Tempo de Avaliação</div>
   <div class="ptab" id="ptAcomp" data-page="acomp" draggable="true">Acompanhamento de Vendas</div>
@@ -881,6 +899,7 @@ function switchPage(page) {
   document.getElementById('pageCritico').style.display = page==='critico'?'block':'none';
   const _pa=document.getElementById('pageAcomp');if(_pa)_pa.style.display=page==='acomp'?'block':'none';
   const _pe=document.getElementById('pageEstoque');if(_pe)_pe.style.display=page==='estoque'?'block':'none';
+  const _pts=document.getElementById('pageTempoEstoque');if(_pts)_pts.style.display=page==='tempo-estoque'?'block':'none';
   const _pae=document.getElementById('pageAgingEstoque');if(_pae)_pae.style.display=page==='aging-estoque'?'block':'none';
   const _pao=document.getElementById('pageAgingOficina');if(_pao)_pao.style.display=page==='aging-oficina'?'block':'none';
   const _po=document.getElementById('pageOficina');if(_po)_po.style.display=page==='oficina'?'block':'none';
@@ -897,6 +916,7 @@ function switchPage(page) {
   document.getElementById('ptCritico').classList.toggle('active', page==='critico');
   const _pta=document.getElementById('ptAcomp');if(_pta)_pta.classList.toggle('active',page==='acomp');
   const _pte=document.getElementById('ptEstoque');if(_pte)_pte.classList.toggle('active',page==='estoque');
+  const _ptte=document.getElementById('ptTempoEstoque');if(_ptte)_ptte.classList.toggle('active',page==='tempo-estoque');
   const _ptae=document.getElementById('ptAgingEstoque');if(_ptae)_ptae.classList.toggle('active',page==='aging-estoque');
   const _ptao=document.getElementById('ptAgingOficina');if(_ptao)_ptao.classList.toggle('active',page==='aging-oficina');
   const _pto=document.getElementById('ptOficina');if(_pto)_pto.classList.toggle('active',page==='oficina');
@@ -925,6 +945,7 @@ function switchPage(page) {
   const cp=document.getElementById('critico-tab-pepb');if(cp)cp.style.display='none';
   if(page==='acomp') initAcompPage();
   if(page==='estoque') initEstoquePage();
+  if(page==='tempo-estoque') initTempoEstoquePage();
 }
 
 function onAvalSheetChange(name) {
@@ -2804,11 +2825,16 @@ async function loadGiroSheet(name) {
       familia: extractFamily(r['MODELO']||r[' ']||r['']||''),
       modelo:  String(r['MODELO']||r[' ']||r['']||'').trim(),
       loja:    String(r['LOJA']||'').trim(),
+      placa:   String(r['PLACA']||'').trim(),
+      ano:     String(r['ANO ']||r['ANO']||'').trim(),
+      km:      toNum(r['KM']),
       vendas:  toNum(r['( = ) Total']),
       dias:    toNum(r['DiasEstoque']),
       margem:  toNum(r['% Margem']),
       margemRS:toNum(r['Margem R$']),
       tkm:     toNum(r['Total Recebido']||r['TKM']),
+      pago:    toNum(r['%PAGO']),
+      fipe:    toNum(r['% VENDA FIPE VENDA']||r['% VENDA FIPE']||r['%FIPE']),
     })).filter(r=>r.vendas>0 && !r.loja.toUpperCase().includes('NEWVIA'));
     renderGiro(rows, name);
   } catch(e) {
@@ -2886,14 +2912,20 @@ function _giroTh(col, label, align){
 }
 
 // HTML das linhas a partir de uma lista de modelos
-function _giroRowsHtml(modelos){
+function _giroRowsHtml(modelos, regId){
+  regId = regId||'geral';
   const fmtN = v => (v||0).toLocaleString('pt-BR',{maximumFractionDigits:1});
   const fmtP = v => ((v||0)*100).toFixed(2)+'%';
   const pCol = v => v>=0.07?'var(--green)':v>=0.04?'var(--amber)':'var(--red)';
   const diasCol = v => v<30?'var(--green)':v<60?'var(--blue)':v<90?'var(--amber)':'var(--red)';
   const diasBadge = v => '<span style="font-weight:700;color:'+diasCol(v)+'">'+fmtN(v)+' dias</span>';
-  return modelos.map((m,i)=>'<tr style="background:'+(i%2===0?'#fafaf8':'#fff')+';border-bottom:1px solid var(--border)">'
-    +'<td style="padding:7px 12px;text-align:center;font-weight:700;color:#bbb">'+(i+1)+'</td>'
+  window._giroDrillData = window._giroDrillData || {};
+  window._giroDrillData[regId] = {};
+  return modelos.map((m,i)=>{
+    const did='girodrill_'+regId+'_'+i;
+    window._giroDrillData[regId][i]=m.placas||[];
+    return '<tr style="background:'+(i%2===0?'#fafaf8':'#fff')+';border-bottom:1px solid var(--border);cursor:pointer" onclick="toggleGiroDrill(\''+regId+'\','+i+')">'
+    +'<td style="padding:7px 12px;text-align:center;font-weight:700;color:#bbb"><span id="giroarw_'+regId+'_'+i+'" style="color:#1a2a48;font-weight:700">+</span> '+(i+1)+'</td>'
     +'<td style="padding:7px 12px;font-weight:600">'+m.familia+'</td>'
     +'<td style="padding:7px 12px;text-align:center;font-weight:700">'+m.qtd+'</td>'
     +'<td style="padding:7px 12px;text-align:center">'+diasBadge(m.mediaDias)+'</td>'
@@ -2901,8 +2933,441 @@ function _giroRowsHtml(modelos){
     +'<td style="padding:7px 12px;text-align:center;color:'+diasCol(m.maxDias)+'">'+fmtN(m.maxDias)+' dias</td>'
     +'<td style="padding:7px 12px;text-align:center;color:'+pCol(m.pctMrg)+';font-weight:700">'+fmtP(m.pctMrg)+'</td>'
     +'<td style="padding:7px 12px;text-align:center"><span style="padding:2px 10px;border-radius:20px;font-size:11px;font-weight:600;background:'+(m.mediaDias<30?'#e8f5ee':m.mediaDias<60?'#e8f0fd':m.mediaDias<90?'#fdf5e0':'#fce8e8')+';color:'+diasCol(m.mediaDias)+'">'+(m.mediaDias<30?'Rápido':m.mediaDias<60?'Normal':m.mediaDias<90?'Lento':'Crítico')+'</span></td>'
-    +'</tr>').join('');
+    +'</tr>'
+    +'<tr id="'+did+'" style="display:none"><td colspan="8" style="padding:0;background:#f4f6fa"></td></tr>';
+  }).join('');
 }
+
+// estado de ordenação de cada drill de giro
+window._giroDrillSort = window._giroDrillSort || {};
+function toggleGiroDrill(regId,i){
+  const did='girodrill_'+regId+'_'+i;
+  const tr=document.getElementById(did);
+  const arw=document.getElementById('giroarw_'+regId+'_'+i);
+  if(!tr) return;
+  if(tr.style.display==='none'){
+    tr.style.display='';
+    tr.firstChild.innerHTML=_giroDrillHtml(regId,i);
+    if(arw) arw.textContent='−';
+  } else {
+    tr.style.display='none';
+    if(arw) arw.textContent='+';
+  }
+}
+function sortGiroDrill(regId,i,campo){
+  const key=regId+'_'+i;
+  const cur=window._giroDrillSort[key]||{};
+  const dir=(cur.campo===campo && cur.dir==='asc')?'desc':'asc';
+  window._giroDrillSort[key]={campo:campo,dir:dir};
+  const tr=document.getElementById('girodrill_'+regId+'_'+i);
+  if(tr && tr.style.display!=='none') tr.firstChild.innerHTML=_giroDrillHtml(regId,i);
+}
+function _giroDrillHtml(regId,i){
+  const key=regId+'_'+i;
+  let list=((window._giroDrillData[regId]||{})[i]||[]).slice();
+  const s=window._giroDrillSort[key]||{campo:'dias',dir:'desc'};
+  const mul=(s.dir==='asc')?1:-1;
+  list.sort((a,b)=>{ let va=a[s.campo],vb=b[s.campo];
+    if(typeof va==='string'){ va=va.toUpperCase(); vb=String(vb).toUpperCase(); return va<vb?-1*mul:va>vb?1*mul:0; }
+    return ((va||0)-(vb||0))*mul; });
+  const fmtP=v=>((v||0)*100).toFixed(1)+'%';
+  const arrow=c=> (s.campo===c?(s.dir==='asc'?' ▲':' ▼'):' ⇅');
+  const TH='background:#2a3a58;color:#fff;padding:6px 10px;font-size:10px;font-weight:700;text-transform:uppercase;cursor:pointer;white-space:nowrap;user-select:none';
+  const TD='padding:5px 10px;font-size:11px;border-bottom:1px solid #e2e6ee;white-space:nowrap';
+  const th=(rot,campo,al)=>'<th style="'+TH+';text-align:'+al+'" onclick="sortGiroDrill(\''+regId+'\','+i+',\''+campo+'\')">'+rot+arrow(campo)+'</th>';
+  let h='<div style="padding:8px 14px;overflow-x:auto"><table style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #d5dae6"><thead><tr>'
+    +th('Placa','placa','left')+th('Loja','loja','left')+th('Ano','ano','center')+th('KM','km','right')
+    +th('Dias','dias','center')+th('% Margem','margem','right')+th('% Pago','pago','right')+th('% Venda Fipe','fipe','right')
+    +'</tr></thead><tbody>';
+  if(!list.length){ h+='<tr><td colspan="8" style="'+TD+';color:var(--muted)">Sem placas neste modelo.</td></tr>'; }
+  list.forEach((r,idx)=>{
+    h+='<tr style="background:'+(idx%2===0?'#fff':'#f6f8fc')+'">'
+      +'<td style="'+TD+';font-weight:700">'+(r.placa||'—')+'</td>'
+      +'<td style="'+TD+'">'+(r.loja||'—')+'</td>'
+      +'<td style="'+TD+';text-align:center">'+(r.ano||'—')+'</td>'
+      +'<td style="'+TD+';text-align:right">'+(r.km>0?fmtN2(r.km)+' km':'—')+'</td>'
+      +'<td style="'+TD+';text-align:center;font-weight:700;color:'+(r.dias<30?'#1a7a4c':r.dias<60?'#1a3c8a':r.dias<90?'#c8921a':'#c62828')+'">'+(r.dias||0)+' dias</td>'
+      +'<td style="'+TD+';text-align:right;font-weight:700;color:'+(r.margem>=0.07?'#1a7a4c':r.margem>=0.04?'#c8921a':'#c62828')+'">'+fmtP(r.margem)+'</td>'
+      +'<td style="'+TD+';text-align:right">'+fmtP(r.pago)+'</td>'
+      +'<td style="'+TD+';text-align:right;color:var(--muted)">'+fmtP(r.fipe)+'</td>'
+      +'</tr>';
+  });
+  h+='</tbody></table></div>';
+  return h;
+}
+function fmtN2(v){ return (v||0).toLocaleString('pt-BR',{maximumFractionDigits:0}); }
+
+// ── TEMPO DE ESTOQUE (idade do estoque atual por modelo) ─────────────────────
+function initTempoEstoquePage(){
+  if(!API_ESTOQUE){
+    document.getElementById('tempo-est-tab-geral').innerHTML =
+      '<div style="padding:2rem;color:var(--muted)">Configure a URL da API de Estoque nas configurações (⚙) para carregar esta aba.</div>';
+    return;
+  }
+  const sel=document.getElementById('tempoEstoqueSheetSelect');
+  if(!sel) return;
+  if(sel.options.length>1){ if(sel.value) loadTempoEstoqueSheet(sel.value); return; }
+  sel.innerHTML='<option>Carregando abas...</option>';
+  jsonp(API_ESTOQUE,{sheet:'__sheets__'}).then(data=>{
+    const sheets=data.sheets||[];
+    sel.innerHTML=sheets.map(s=>'<option value="'+s+'">'+s+'</option>').join('');
+    if(!sel.options.length) return;
+    const match=sheets[sheets.length-1];
+    sel.value=match;
+    loadTempoEstoqueSheet(match);
+  }).catch(()=>{ sel.innerHTML='<option>Erro ao carregar abas</option>'; });
+}
+
+async function loadTempoEstoqueSheet(name){
+  const body=document.getElementById('tempo-est-tab-geral');
+  body.innerHTML='<div style="padding:2rem;text-align:center;color:var(--muted)"><div class="spin2" style="margin:0 auto 8px"></div>Carregando...</div>';
+  try{
+    const data=await jsonp(API_ESTOQUE,{sheet:name});
+    if(data.error) throw new Error(data.error);
+    const headers=data.headers||[];
+    const diasCol=headers[20]||'DiasEstoque';
+    const estoCol=data.estoqueCol||headers[31]||'ESTOQUE';
+    const rows=(data.rows||[]).map(r=>{
+      const modelo=String(r['MODELO']||r['Modelo']||r['modelo']||'').trim();
+      const loja=String(r['EMPRESA']||r['Empresa']||r['LOJA']||r['Loja']||r['loja']||'').trim().toUpperCase();
+      const tipo=String(r[estoCol]||'').trim();
+      return {
+        familia: extractFamily(modelo),
+        modeloFull: modelo,
+        loja: loja,
+        placa: String(r['PLACA']||r['Placa']||r['placa']||'').trim().toUpperCase(),
+        ano: String(r['ANO ']||r['ANO']||r['Ano']||'').trim(),
+        km: toNum(r['KM']||r['Km']||r['km']),
+        dias: toNum(r[diasCol]||0),
+        tipo: tipo,
+        finalidade: SHOWROOM_TIPOS.some(t=>tipo.includes(t.split(' ')[0]))?'SHOWROOM':(String(tipo).toUpperCase().includes('REPASSE')?'REPASSE':'OUTRO')
+      };
+    }).filter(r=>r.familia && !r.loja.includes('NEWVIA'));
+    window._tempoEstoqueRows=rows;
+    // tipos de estoque (mesmo filtro da aba Estoque)
+    window._tempoEstAllTipos=[...new Set(rows.map(r=>r.tipo).filter(Boolean))].sort();
+    if(!window._tempoEstSelectedTipos || !window._tempoEstSelectedTipos.size){
+      const defaultTipos=window._tempoEstAllTipos.filter(t=>
+        SHOWROOM_TIPOS.some(s=>t.includes(s.split(' - ')[0]))||REPASSE_TIPOS.some(s=>t.includes('REPASSE'))
+      );
+      window._tempoEstSelectedTipos=new Set(defaultTipos.length?defaultTipos:window._tempoEstAllTipos);
+    }
+    renderTempoEstoque(rows,name);
+  }catch(e){
+    body.innerHTML='<div style="padding:2rem;color:var(--red)">Erro: '+e.message+'</div>';
+  }
+}
+
+function renderTempoEstoque(rows,name){
+  window._tempoEstName=name;
+  const geral=rows;
+  const bace=rows.filter(r=>BA_CE.some(l=>r.loja.toUpperCase().includes(l.toUpperCase())));
+  const pepb=rows.filter(r=>PE_PB.some(l=>r.loja.toUpperCase().includes(l.toUpperCase())));
+  window._tempoEstRegion={geral:geral,bace:bace,pepb:pepb};
+  buildTempoEstTab('geral',geral,name,window._tempoEstLoja&&window._tempoEstLoja.geral||'');
+  buildTempoEstTab('bace',bace,name,window._tempoEstLoja&&window._tempoEstLoja.bace||'');
+  buildTempoEstTab('pepb',pepb,name,window._tempoEstLoja&&window._tempoEstLoja.pepb||'');
+}
+
+function showTempoEstTab(id){
+  ['geral','bace','pepb'].forEach(t=>{
+    const el=document.getElementById('tempo-est-tab-'+t); if(el) el.style.display=(t===id)?'block':'none';
+    const bt=document.getElementById('tetab-btn-'+t); if(bt) bt.classList.toggle('active',t===id);
+  });
+}
+
+function filterTempoEstLoja(regId,loja){
+  window._tempoEstLoja=window._tempoEstLoja||{};
+  window._tempoEstLoja[regId]=loja;
+  const all=(window._tempoEstRegion||{})[regId]||[];
+  buildTempoEstTab(regId, all, window._tempoEstName||'', loja);
+}
+
+// lojas selecionadas por região (multi-seleção, igual aba Estoque)
+window._tempoEstSelLojas=window._tempoEstSelLojas||{};
+function toggleTempoEstLojaDD(regId){
+  const dd=document.getElementById('tempoEstLojaDD_'+regId);
+  if(dd) dd.style.display=dd.style.display==='none'?'block':'none';
+}
+function toggleTempoEstLoja(regId,loja){
+  const s=window._tempoEstSelLojas[regId];
+  if(!s) return;
+  if(s.has(loja)) s.delete(loja); else s.add(loja);
+  const all=(window._tempoEstRegion||{})[regId]||[];
+  buildTempoEstTab(regId, all, window._tempoEstName||'', '');
+  setTimeout(()=>{ const dd=document.getElementById('tempoEstLojaDD_'+regId); if(dd) dd.style.display='block'; },0);
+}
+function toggleTempoEstLojaAll(regId,checked,lojas){
+  window._tempoEstSelLojas[regId]=checked?new Set(lojas):new Set();
+  const all=(window._tempoEstRegion||{})[regId]||[];
+  buildTempoEstTab(regId, all, window._tempoEstName||'', '');
+  setTimeout(()=>{ const dd=document.getElementById('tempoEstLojaDD_'+regId); if(dd) dd.style.display='block'; },0);
+}
+
+function toggleTempoEstTipoDD(){
+  const dd=document.getElementById('tempoEstTipoDD');
+  if(dd) dd.style.display=dd.style.display==='none'?'block':'none';
+}
+function toggleTempoEstTipo(tipo){
+  const s=window._tempoEstSelectedTipos;
+  if(s.has(tipo)) s.delete(tipo); else s.add(tipo);
+  renderTempoEstoque(window._tempoEstoqueRows||[], window._tempoEstName||'');
+  // reabre o dropdown para continuar marcando
+  setTimeout(()=>{ const dd=document.getElementById('tempoEstTipoDD'); if(dd) dd.style.display='block'; },0);
+}
+
+function buildTempoEstTab(regId, regionRows, name, lojaFilter){
+  const cont=document.getElementById('tempo-est-tab-'+regId);
+  if(!cont) return;
+  const selT=window._tempoEstSelectedTipos||new Set();
+  const baseFin=regionRows.filter(r=>selT.has(r.tipo));
+  const lojas=[...new Set(baseFin.map(r=>r.loja).filter(Boolean))].sort();
+  // multi-seleção de lojas (padrão: todas)
+  if(!window._tempoEstSelLojas[regId] || [...window._tempoEstSelLojas[regId]].some(l=>!lojas.includes(l) && lojas.length)){
+    // inicializa/resincroniza quando lojas do mês mudam
+    if(!window._tempoEstSelLojas[regId]) window._tempoEstSelLojas[regId]=new Set(lojas);
+  }
+  const selL=window._tempoEstSelLojas[regId];
+  // se a seleção ficou vazia por mudança de aba, volta pra todas
+  if(!selL.size) window._tempoEstSelLojas[regId]=new Set(lojas);
+  const selLojas=window._tempoEstSelLojas[regId];
+  const base=(selLojas.size===lojas.length)?baseFin:baseFin.filter(r=>selLojas.has(r.loja));
+
+  if(!regionRows.length){ cont.innerHTML='<div class="no-data" style="padding:2rem">Sem dados para esta regional</div>'; return; }
+
+  const fmtN=v=>(v||0).toLocaleString('pt-BR',{maximumFractionDigits:1});
+  const diasCol=v=>v<30?'var(--green)':v<60?'var(--blue)':v<90?'var(--amber)':'var(--red)';
+
+  // agrega por família
+  const map={};
+  base.forEach(r=>{
+    const f=r.familia||'—';
+    if(!map[f]) map[f]={familia:f,qtd:0,diasSum:0,minDias:999,maxDias:0,placas:[]};
+    const d=map[f];
+    d.qtd++; d.diasSum+=r.dias;
+    d.minDias=Math.min(d.minDias,r.dias); d.maxDias=Math.max(d.maxDias,r.dias);
+    d.placas.push(r);
+  });
+  const modelos=Object.values(map).map(d=>({
+    familia:d.familia, qtd:d.qtd,
+    mediaDias:d.qtd?d.diasSum/d.qtd:0,
+    minDias:d.minDias===999?0:d.minDias, maxDias:d.maxDias,
+    placas:d.placas
+  })).sort((a,b)=>a.mediaDias-b.mediaDias);
+
+  window._tempoEstModelos=window._tempoEstModelos||{};
+  window._tempoEstModelos[regId]=modelos;
+  window._tempoEstSort=window._tempoEstSort||{};
+  window._tempoEstSort[regId]=window._tempoEstSort[regId]||{};
+
+  const totalQtd=base.length;
+  const globalMedia=base.length?base.reduce((s,r)=>s+r.dias,0)/base.length:0;
+  const rapidos=modelos.filter(m=>m.mediaDias<30).length;
+  const lentos=modelos.filter(m=>m.mediaDias>=60).length;
+  const maisNovo=modelos[0]?.familia||'—';
+  const maisVelho=modelos[modelos.length-1]?.familia||'—';
+
+  const kpi=(l,v,bg,cx)=>'<div style="flex:1;min-width:150px;background:'+(bg||'#fff')+';border:1px solid var(--border);border-radius:3px;padding:.7rem 1.2rem"><p style="font-size:10px;color:var(--muted);margin:0 0 2px;text-transform:uppercase;letter-spacing:.5px;font-weight:600">'+l+'</p><p style="font-size:20px;font-weight:700;margin:0;color:'+(cx||'var(--ink)')+'">'+v+'</p></div>';
+
+  const maxDias=Math.max(...modelos.map(m=>m.mediaDias),1);
+  const barras=modelos.map(m=>{
+    const w=Math.max(Math.round(m.mediaDias/maxDias*100),4);
+    return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:7px">'
+      +'<div style="width:120px;text-align:right;font-size:12px;font-weight:600;flex-shrink:0">'+m.familia+'</div>'
+      +'<div style="flex:1;background:#f0efe9;border-radius:2px;height:22px;position:relative;overflow:hidden">'
+        +'<div style="width:'+w+'%;background:'+diasCol(m.mediaDias)+';height:100%;border-radius:2px;display:flex;align-items:center;padding-left:8px">'
+          +'<span style="color:#fff;font-size:11px;font-weight:700">'+fmtN(m.mediaDias)+'d</span>'
+        +'</div>'
+      +'</div>'
+      +'<div style="width:70px;font-size:11px;color:var(--muted);flex-shrink:0">'+m.qtd+' un.</div>'
+      +'</div>';
+  }).join('');
+
+  const allT=window._tempoEstAllTipos||[];
+  const labelTipos=selT.size===allT.length?'Todos os estoques':(selT.size+' selecionado'+(selT.size>1?'s':''));
+  const tipoDD='<div style="position:relative;display:inline-block" class="tempoest-tipo-wrap">'
+    +'<button onclick="toggleTempoEstTipoDD()" style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--border);border-radius:3px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;min-width:220px;justify-content:space-between">'
+      +'<span>Estoque</span><span style="color:var(--muted);font-weight:400">'+labelTipos+'</span><span style="font-size:10px;color:var(--muted)">▼</span>'
+    +'</button>'
+    +'<div id="tempoEstTipoDD" style="display:none;position:absolute;top:100%;left:0;z-index:999;background:#fff;border:1px solid var(--border);border-radius:3px;box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:300px;max-height:320px;overflow-y:auto;margin-top:2px">'
+      +'<div style="padding:8px 12px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between">'
+        +'<span style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Seleções múltiplas</span>'
+        +'<span onclick="toggleTempoEstTipoDD()" style="cursor:pointer;font-size:16px;color:var(--muted);line-height:1">∧</span>'
+      +'</div>'
+      +allT.map(t=>{
+        const isSR=SHOWROOM_TIPOS.some(s=>t.includes(s.split(' - ')[0]));
+        const isRP=t.includes('REPASSE');
+        const tag=isSR?'<span style="font-size:9px;background:#e8f5ee;color:var(--green);border-radius:2px;padding:1px 4px;margin-left:6px">SHOWROOM</span>':
+                  isRP?'<span style="font-size:9px;background:#fff3e0;color:var(--amber);border-radius:2px;padding:1px 4px;margin-left:6px">REPASSE</span>':'';
+        return '<label style="display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;border-bottom:1px solid #f5f4f0;font-size:12px" onmouseenter="this.style.background=\'#f5f4f0\'" onmouseleave="this.style.background=\'\'">'
+          +'<input type="checkbox" '+(selT.has(t)?'checked':'')+' onchange="toggleTempoEstTipo(\''+t.replace(/'/g,"\\'")+'\')">'
+          +'<span style="flex:1">'+t+'</span>'+tag+'</label>';
+      }).join('')
+    +'</div></div>';
+
+  const labelLojas=(selLojas.size===lojas.length)?'Todas as lojas':(selLojas.size+' selecionada'+(selLojas.size>1?'s':''));
+  const lojaDD='<div style="position:relative;display:inline-block" class="tempoest-loja-wrap">'
+    +'<button onclick="toggleTempoEstLojaDD(\''+regId+'\')" style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--border);border-radius:3px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;min-width:220px;justify-content:space-between">'
+      +'<span>Por Loja</span><span style="color:var(--muted);font-weight:400">'+labelLojas+'</span><span style="font-size:10px;color:var(--muted)">▼</span>'
+    +'</button>'
+    +'<div id="tempoEstLojaDD_'+regId+'" style="display:none;position:absolute;top:100%;left:0;z-index:999;background:#fff;border:1px solid var(--border);border-radius:3px;box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:300px;max-height:320px;overflow-y:auto;margin-top:2px">'
+      +'<div style="padding:8px 12px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between">'
+        +'<span style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Seleções múltiplas</span>'
+        +'<span onclick="toggleTempoEstLojaDD(\''+regId+'\')" style="cursor:pointer;font-size:16px;color:var(--muted);line-height:1">∧</span>'
+      +'</div>'
+      +'<label style="display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;border-bottom:1px solid var(--border);font-size:12px;font-weight:700">'
+        +'<input type="checkbox" '+(selLojas.size===lojas.length?'checked':'')+' onchange="toggleTempoEstLojaAll(\''+regId+'\',this.checked,'+JSON.stringify(lojas).replace(/"/g,'&quot;')+')">'
+        +'<span>Todas as lojas</span></label>'
+      +lojas.map(l=>'<label style="display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;border-bottom:1px solid #f5f4f0;font-size:12px" onmouseenter="this.style.background=\'#f5f4f0\'" onmouseleave="this.style.background=\'\'">'
+        +'<input type="checkbox" '+(selLojas.has(l)?'checked':'')+' onchange="toggleTempoEstLoja(\''+regId+'\',\''+l.replace(/'/g,"\\'")+'\')">'
+        +'<span style="flex:1">'+l+'</span></label>').join('')
+    +'</div></div>';
+  const filterBar='<div style="background:#f5f4f0;border:1px solid var(--border);border-radius:3px;padding:8px 12px;margin-bottom:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">'
+    +lojaDD
+    +tipoDD
+    +((selLojas.size!==lojas.length)?'<span style="font-size:11px;color:var(--muted)">Mostrando <b style="color:var(--ink)">'+base.length+'</b> de <b style="color:var(--ink)">'+baseFin.length+'</b></span>':'')
+  +'</div>';
+
+  cont.innerHTML=
+  filterBar
+  +'<div style="background:#111;padding:14px 20px 12px;border-radius:3px 3px 0 0;margin-bottom:16px">'
+    +'<div style="color:#fff;font-size:17px;font-weight:700">Tempo de Estoque por Modelo — '+name+'</div>'
+    +'<div style="color:#999;font-size:10px;text-transform:uppercase;letter-spacing:1px;margin-top:2px">Média de dias em estoque (unidades atualmente em estoque) por família'+(regId==='bace'?' · Bahia e Ceará':regId==='pepb'?' · Pernambuco e Paraíba':'')+'</div>'
+  +'</div>'
+  +'<div style="display:flex;gap:12px;margin-bottom:18px;flex-wrap:wrap">'
+    +kpi('Unidades em Estoque',totalQtd.toLocaleString('pt-BR'))
+    +kpi('Média Global',fmtN(globalMedia)+' dias','#eef4fd','var(--blue)')
+    +kpi('Giro Rápido (<30d)',rapidos+' modelos','#e8f5ee','var(--green)')
+    +kpi('Parado (≥60d)',lentos+' modelos','#fce8e8','var(--red)')
+    +kpi('Mais Novo',maisNovo,'#fff','var(--green)')
+    +kpi('Mais Antigo',maisVelho,'#fff','var(--red)')
+  +'</div>'
+  +'<div style="background:#fff;border:1px solid var(--border);border-radius:3px;padding:16px 20px;margin-bottom:18px">'
+    +'<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;color:var(--muted)">Média de dias em estoque por modelo (do mais novo ao mais antigo)</div>'
+    +barras
+  +'</div>'
+  +'<div style="border:1px solid var(--border);border-radius:3px;overflow:hidden">'
+    +'<div style="background:#1e1e1e;color:#fff;padding:10px 14px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px">Tabela Completa — Tempo por Modelo</div>'
+    +'<div class="tbl-wrap"><table style="width:100%;border-collapse:collapse;font-size:12px">'
+      +'<thead><tr>'
+        +'<th style="background:#2a2a2a;color:#fff;padding:8px 12px;text-align:center;font-size:10px;text-transform:uppercase;width:52px">#</th>'
+        +_tempoEstTh(regId,'familia','Modelo','left')
+        +_tempoEstTh(regId,'qtd','Qtd. em Estoque','center')
+        +_tempoEstTh(regId,'mediaDias','Média Dias','center')
+        +_tempoEstTh(regId,'minDias','Min Dias','center')
+        +_tempoEstTh(regId,'maxDias','Max Dias','center')
+        +'<th style="background:#2a2a2a;color:#fff;padding:8px 12px;text-align:center;font-size:10px;text-transform:uppercase">Classificação</th>'
+      +'</tr></thead>'
+      +'<tbody id="tempo-est-tbody-'+regId+'">'+_tempoEstRowsHtml(modelos,regId)+'</tbody>'
+    +'</table></div>'
+  +'</div>';
+}
+
+function _tempoEstTh(regId,col,label,align){
+  return '<th onclick="sortTempoEst(\''+regId+'\',\''+col+'\')" style="background:#2a2a2a;color:#fff;padding:8px 12px;text-align:'+align+';font-size:10px;text-transform:uppercase;cursor:pointer;user-select:none;white-space:nowrap" title="Ordenar"><span id="tempoEstArrow_'+regId+'_'+col+'"></span> '+label+' <span style="opacity:.5;font-size:8px">▲▼</span></th>';
+}
+
+function _tempoEstRowsHtml(modelos,regId){
+  regId=regId||'geral';
+  const fmtN=v=>(v||0).toLocaleString('pt-BR',{maximumFractionDigits:1});
+  const diasCol=v=>v<30?'var(--green)':v<60?'var(--blue)':v<90?'var(--amber)':'var(--red)';
+  const diasBadge=v=>'<span style="font-weight:700;color:'+diasCol(v)+'">'+fmtN(v)+' dias</span>';
+  window._tempoEstDrillData=window._tempoEstDrillData||{};
+  window._tempoEstDrillData[regId]={};
+  return modelos.map((m,i)=>{
+    window._tempoEstDrillData[regId][i]=m.placas||[];
+    return '<tr style="background:'+(i%2===0?'#fafaf8':'#fff')+';border-bottom:1px solid var(--border);cursor:pointer" onclick="toggleTempoEstDrill(\''+regId+'\','+i+')">'
+    +'<td style="padding:7px 12px;text-align:center;font-weight:700;color:#bbb"><span id="tearw_'+regId+'_'+i+'" style="color:#1a2a48;font-weight:700">+</span> '+(i+1)+'</td>'
+    +'<td style="padding:7px 12px;font-weight:600">'+m.familia+'</td>'
+    +'<td style="padding:7px 12px;text-align:center;font-weight:700">'+m.qtd+'</td>'
+    +'<td style="padding:7px 12px;text-align:center">'+diasBadge(m.mediaDias)+'</td>'
+    +'<td style="padding:7px 12px;text-align:center;color:var(--green)">'+fmtN(m.minDias)+' dias</td>'
+    +'<td style="padding:7px 12px;text-align:center;color:'+diasCol(m.maxDias)+'">'+fmtN(m.maxDias)+' dias</td>'
+    +'<td style="padding:7px 12px;text-align:center"><span style="padding:2px 10px;border-radius:20px;font-size:11px;font-weight:600;background:'+(m.mediaDias<30?'#e8f5ee':m.mediaDias<60?'#e8f0fd':m.mediaDias<90?'#fdf5e0':'#fce8e8')+';color:'+diasCol(m.mediaDias)+'">'+(m.mediaDias<30?'Rápido':m.mediaDias<60?'Normal':m.mediaDias<90?'Lento':'Crítico')+'</span></td>'
+    +'</tr>'
+    +'<tr id="tedrill_'+regId+'_'+i+'" style="display:none"><td colspan="7" style="padding:0;background:#f4f6fa"></td></tr>';
+  }).join('');
+}
+
+function sortTempoEst(regId,col){
+  const modelos=(window._tempoEstModelos||{})[regId]; if(!modelos) return;
+  const st=window._tempoEstSort[regId]||{};
+  let dir;
+  if(st.col===col){ dir=st.dir==='desc'?'asc':(st.dir==='asc'?null:'desc'); } else dir='desc';
+  st.col=dir?col:null; st.dir=dir;
+  window._tempoEstSort[regId]=st;
+  let ordenados;
+  if(!dir){ ordenados=[...modelos].sort((a,b)=>a.mediaDias-b.mediaDias); }
+  else{
+    ordenados=[...modelos].sort((a,b)=>{
+      let va=a[col],vb=b[col];
+      if(col==='familia'){ va=String(va).toUpperCase(); vb=String(vb).toUpperCase(); return dir==='asc'?(va<vb?-1:va>vb?1:0):(va>vb?-1:va<vb?1:0); }
+      return dir==='asc'?(va-vb):(vb-va);
+    });
+  }
+  const tb=document.getElementById('tempo-est-tbody-'+regId);
+  if(tb) tb.innerHTML=_tempoEstRowsHtml(ordenados,regId);
+  ['familia','qtd','mediaDias','minDias','maxDias'].forEach(cx=>{
+    const ar=document.getElementById('tempoEstArrow_'+regId+'_'+cx);
+    if(ar) ar.textContent=(dir && cx===col)?(dir==='asc'?'▲':'▼'):'';
+  });
+}
+
+// drill de placas do Tempo de Estoque (por região)
+window._tempoEstDrillSort=window._tempoEstDrillSort||{};
+function toggleTempoEstDrill(regId,i){
+  const tr=document.getElementById('tedrill_'+regId+'_'+i);
+  const arw=document.getElementById('tearw_'+regId+'_'+i);
+  if(!tr) return;
+  if(tr.style.display==='none'){
+    tr.style.display='';
+    tr.firstChild.innerHTML=_tempoEstDrillHtml(regId,i);
+    if(arw) arw.textContent='−';
+  } else {
+    tr.style.display='none';
+    if(arw) arw.textContent='+';
+  }
+}
+function sortTempoEstDrill(regId,i,campo){
+  const key=regId+'_'+i;
+  const cur=window._tempoEstDrillSort[key]||{};
+  const dir=(cur.campo===campo && cur.dir==='asc')?'desc':'asc';
+  window._tempoEstDrillSort[key]={campo:campo,dir:dir};
+  const tr=document.getElementById('tedrill_'+regId+'_'+i);
+  if(tr && tr.style.display!=='none') tr.firstChild.innerHTML=_tempoEstDrillHtml(regId,i);
+}
+function _tempoEstDrillHtml(regId,i){
+  const key=regId+'_'+i;
+  let list=(((window._tempoEstDrillData||{})[regId]||{})[i]||[]).slice();
+  const s=window._tempoEstDrillSort[key]||{campo:'dias',dir:'desc'};
+  const mul=(s.dir==='asc')?1:-1;
+  list.sort((a,b)=>{ let va=a[s.campo],vb=b[s.campo];
+    if(typeof va==='string'){ va=va.toUpperCase(); vb=String(vb).toUpperCase(); return va<vb?-1*mul:va>vb?1*mul:0; }
+    return ((va||0)-(vb||0))*mul; });
+  const arrow=cx=>(s.campo===cx?(s.dir==='asc'?' ▲':' ▼'):' ⇅');
+  const TH='background:#2a3a58;color:#fff;padding:6px 10px;font-size:10px;font-weight:700;text-transform:uppercase;cursor:pointer;white-space:nowrap;user-select:none';
+  const TD='padding:5px 10px;font-size:11px;border-bottom:1px solid #e2e6ee;white-space:nowrap';
+  const th=(rot,campo,al)=>'<th style="'+TH+';text-align:'+al+'" onclick="sortTempoEstDrill(\''+regId+'\','+i+',\''+campo+'\')">'+rot+arrow(campo)+'</th>';
+  let h='<div style="padding:8px 14px;overflow-x:auto"><table style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #d5dae6"><thead><tr>'
+    +th('Placa','placa','left')+th('Modelo','modeloFull','left')+th('Loja','loja','left')
+    +th('Ano','ano','center')+th('KM','km','right')+th('Dias em Estoque','dias','center')+th('Tipo','tipo','left')
+    +'</tr></thead><tbody>';
+  if(!list.length){ h+='<tr><td colspan="7" style="'+TD+';color:var(--muted)">Sem placas neste modelo.</td></tr>'; }
+  list.forEach((r,idx)=>{
+    h+='<tr style="background:'+(idx%2===0?'#fff':'#f6f8fc')+'">'
+      +'<td style="'+TD+';font-weight:700">'+(r.placa||'—')+'</td>'
+      +'<td style="'+TD+'">'+(r.modeloFull||'—')+'</td>'
+      +'<td style="'+TD+'">'+(r.loja||'—')+'</td>'
+      +'<td style="'+TD+';text-align:center">'+(r.ano||'—')+'</td>'
+      +'<td style="'+TD+';text-align:right">'+(r.km>0?fmtN2(r.km)+' km':'—')+'</td>'
+      +'<td style="'+TD+';text-align:center;font-weight:700;color:'+(r.dias<30?'#1a7a4c':r.dias<60?'#1a3c8a':r.dias<90?'#c8921a':'#c62828')+'">'+(r.dias||0)+' dias</td>'
+      +'<td style="'+TD+'">'+(r.tipo||'—')+'</td>'
+      +'</tr>';
+  });
+  h+='</tbody></table></div>';
+  return h;
+}
+
 
 // Ordena a tabela de Giro da região visível
 function sortGiro(col){
@@ -2931,7 +3396,7 @@ function sortGiro(col){
     });
   }
   const tb=document.getElementById('giro-tbody-'+regId);
-  if(tb) tb.innerHTML=_giroRowsHtml(ordenados);
+  if(tb) tb.innerHTML=_giroRowsHtml(ordenados, regId);
   // atualiza setas
   ['familia','qtd','mediaDias','minDias','maxDias','pctMrg'].forEach(c=>{
     const ar=document.getElementById('giroArrow_'+c);
@@ -2951,10 +3416,11 @@ function buildGiroContent(target, rows, name) {
   const map = {};
   rows.forEach(r=>{
     const f=r.familia||'—';
-    if(!map[f]) map[f]={familia:f,qtd:0,diasSum:0,mrgSum:0,recSum:0,count:0,minDias:999,maxDias:0};
+    if(!map[f]) map[f]={familia:f,qtd:0,diasSum:0,mrgSum:0,recSum:0,count:0,minDias:999,maxDias:0,placas:[]};
     const d=map[f];
     d.qtd+=r.vendas; d.diasSum+=r.dias; d.count++; d.mrgSum+=r.margemRS; d.recSum+=r.tkm;
     if(r.dias>0){d.minDias=Math.min(d.minDias,r.dias);d.maxDias=Math.max(d.maxDias,r.dias);}
+    d.placas.push(r);
   });
 
   const modelos = Object.values(map).map(d=>({
@@ -2963,6 +3429,7 @@ function buildGiroContent(target, rows, name) {
     pctMrg: d.recSum?d.mrgSum/d.recSum:0,
     minDias: d.minDias===999?0:d.minDias,
     maxDias: d.maxDias,
+    placas: d.placas,
     score: d.count?d.diasSum/d.count:0 // lower = faster giro
   })).sort((a,b)=>a.mediaDias-b.mediaDias);
 
@@ -3061,7 +3528,7 @@ function buildGiroContent(target, rows, name) {
         <th style="background:#2a2a2a;color:#fff;padding:8px 12px;text-align:center;font-size:10px;text-transform:uppercase">Classificação</th>
       </tr></thead>
       <tbody id="giro-tbody-${target.id.replace('giro-body-','')}">
-        ${_giroRowsHtml(modelos)}
+        ${_giroRowsHtml(modelos, target.id.replace('giro-body-',''))}
       </tbody>
     </table>
   </div>`;
