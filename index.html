@@ -3075,11 +3075,17 @@ async function loadTempoEstoqueSheet(name){
     window._tempoEstoqueRows=rows;
     // tipos de estoque (mesmo filtro da aba Estoque)
     window._tempoEstAllTipos=[...new Set(rows.map(r=>r.tipo).filter(Boolean))].sort();
-    if(!window._tempoEstSelectedTipos || !window._tempoEstSelectedTipos.size){
-      const defaultTipos=window._tempoEstAllTipos.filter(t=>
-        SHOWROOM_TIPOS.some(s=>t.includes(s.split(' - ')[0]))||REPASSE_TIPOS.some(s=>t.includes('REPASSE'))
-      );
-      window._tempoEstSelectedTipos=new Set(defaultTipos.length?defaultTipos:window._tempoEstAllTipos);
+    // pré-selecionados por padrão: Seminovos BA (12 meses), VOF, VS, VU. VR (Repasse) fica DESMARCADO.
+    if(window._tempoEstSelectedTipos===undefined){
+      const isDefault=t=>{
+        const u=String(t).toUpperCase();
+        if(u.includes('REPASSE')) return false;           // VR fica de fora
+        return u.includes('SEMINOVOS BA') || u.includes('VOF') || u.includes('OFICINA')
+            || u.includes('SHOWROOM') || u.includes('VS -')
+            || (/\bVU\b/.test(u)) || u.includes('VU -');
+      };
+      const defaultTipos=window._tempoEstAllTipos.filter(isDefault);
+      window._tempoEstSelectedTipos=new Set(defaultTipos.length?defaultTipos:window._tempoEstAllTipos.filter(t=>!String(t).toUpperCase().includes('REPASSE')));
     }
     renderTempoEstoque(rows,name);
   }catch(e){
