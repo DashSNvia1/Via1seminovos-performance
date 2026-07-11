@@ -3055,7 +3055,10 @@ async function loadTempoEstoqueSheet(name){
     if(data.error) throw new Error(data.error);
     const headers=data.headers||[];
     const diasCol=headers[20]||'DiasEstoque';
-    const estoCol=data.estoqueCol||headers[31]||'ESTOQUE';
+    // detecta a coluna de tipo de estoque: prioriza estoqueCol da API, depois header chamado "Estoque",
+    // depois índice 31, por fim 'ESTOQUE'. Evita cair no fallback errado quando headers chegam fora de ordem.
+    const _estoNome=headers.find(h=>String(h).trim().toLowerCase()==='estoque');
+    const estoCol=data.estoqueCol||_estoNome||headers[31]||'Estoque';
     const rows=(data.rows||[]).map(r=>{
       const modelo=String(r['MODELO']||r['Modelo']||r['modelo']||'').trim();
       const loja=String(r['EMPRESA']||r['Empresa']||r['LOJA']||r['Loja']||r['loja']||'').trim().toUpperCase();
@@ -3073,19 +3076,21 @@ async function loadTempoEstoqueSheet(name){
       };
     }).filter(r=>r.familia && !r.loja.includes('NEWVIA'));
     window._tempoEstoqueRows=rows;
-    // tipos de estoque (mesmo filtro da aba Estoque)
-    window._tempoEstAllTipos=[...new Set(rows.map(r=>r.tipo).filter(Boolean))].sort();
-    // pré-selecionados por padrão: Seminovos BA (12 meses), VOF, VS, VU. VR (Repasse) fica DESMARCADO.
-    if(window._tempoEstSelectedTipos===undefined){
-      const isDefault=t=>{
-        const u=String(t).toUpperCase();
-        if(u.includes('REPASSE')) return false;           // VR fica de fora
-        return u.includes('SEMINOVOS BA') || u.includes('VOF') || u.includes('OFICINA')
-            || u.includes('SHOWROOM') || u.includes('VS -')
-            || (/\bVU\b/.test(u)) || u.includes('VU -');
-      };
-      const defaultTipos=window._tempoEstAllTipos.filter(isDefault);
-      window._tempoEstSelectedTipos=new Set(defaultTipos.length?defaultTipos:window._tempoEstAllTipos.filter(t=>!String(t).toUpperCase().includes('REPASSE')));
+    // tipos de estoque: prioriza lista do Apps Script; se vier vazia/ausente, extrai dos próprios rows
+    const tiposDaAPI = (data.tiposEstoque && data.tiposEstoque.length) ? data.tiposEstoque : null;
+    const tiposDosRows = [...new Set(rows.map(r=>r.tipo).filter(Boolean))].sort();
+    window._tempoEstAllTipos = tiposDaAPI || tiposDosRows;
+    console.log('[TempoEstoque] tiposEstoque(API):', data.tiposEstoque, '| tipos(rows):', tiposDosRows, '| estoCol:', estoCol, '| headers[31]:', headers[31], '| exemplo r[0]:', (data.rows||[])[0]);
+    // pré-selecionados: TODOS os tipos, EXCETO Repasse (VR). Robusto a variações de nome.
+    // (Re)inicializa quando ainda não há seleção OU quando a seleção está vazia mas agora há tipos disponíveis
+    // — isso cobre o caso de a 1ª chamada vir sem headers (lista vazia) e a definitiva vir preenchida.
+    const _semSelecao = (window._tempoEstSelectedTipos===undefined) ||
+                        (window._tempoEstSelectedTipos.size===0 && window._tempoEstAllTipos.length>0 && !window._tempoEstTipoTocado);
+    if(_semSelecao){
+      const ehRepasse=t=>{ const u=String(t).toUpperCase(); return u.includes('REPASSE') || /^VR\b/.test(u) || u.indexOf('VR -')!==-1; };
+      const defaultTipos=window._tempoEstAllTipos.filter(t=>!ehRepasse(t));
+      window._tempoEstSelectedTipos=new Set(defaultTipos.length?defaultTipos:window._tempoEstAllTipos);
+      console.log('[TempoEstoque] tipos disponíveis:', window._tempoEstAllTipos, '| pré-marcados:', [...window._tempoEstSelectedTipos]);
     }
     renderTempoEstoque(rows,name);
   }catch(e){
@@ -3127,6 +3132,8 @@ function toggleTempoEstLojaDD(regId){
 function toggleTempoEstLoja(regId,loja){
   const s=window._tempoEstSelLojas[regId];
   if(!s) return;
+  window._tempoEstLojaTocado=window._tempoEstLojaTocado||{};
+  window._tempoEstLojaTocado[regId]=true; // usuário mexeu
   if(s.has(loja)) s.delete(loja); else s.add(loja);
   // preserva posição de rolagem do dropdown
   const ddOld=document.getElementById('tempoEstLojaDD_'+regId);
@@ -3136,6 +3143,8 @@ function toggleTempoEstLoja(regId,loja){
   setTimeout(()=>{ const dd=document.getElementById('tempoEstLojaDD_'+regId); if(dd){ dd.style.display='block'; dd.scrollTop=sc; } },0);
 }
 function toggleTempoEstLojaAll(regId,checked,lojas){
+  window._tempoEstLojaTocado=window._tempoEstLojaTocado||{};
+  window._tempoEstLojaTocado[regId]=true; // usuário mexeu
   window._tempoEstSelLojas[regId]=checked?new Set(lojas):new Set();
   const ddOld=document.getElementById('tempoEstLojaDD_'+regId);
   const sc=ddOld?ddOld.scrollTop:0;
@@ -3150,6 +3159,7 @@ function toggleTempoEstTipoDD(){
 }
 function toggleTempoEstTipo(tipo){
   const s=window._tempoEstSelectedTipos;
+  window._tempoEstTipoTocado=true; // usuário mexeu — não re-forçar default
   if(s.has(tipo)) s.delete(tipo); else s.add(tipo);
   const ddOld=document.getElementById('tempoEstTipoDD');
   const sc=ddOld?ddOld.scrollTop:0;
@@ -3163,9 +3173,12 @@ function buildTempoEstTab(regId, regionRows, name, lojaFilter){
   const selT=window._tempoEstSelectedTipos||new Set();
   const baseFin=regionRows.filter(r=>selT.has(r.tipo));
   const lojas=[...new Set(baseFin.map(r=>r.loja).filter(Boolean))].sort();
-  // multi-seleção de lojas: inicializa como "todas" APENAS na primeira vez (undefined).
-  // Uma seleção vazia é intencional (usuário desmarcou tudo) e deve ser respeitada.
-  if(window._tempoEstSelLojas[regId]===undefined){
+  // multi-seleção de lojas: inicializa "todas" na 1ª vez (undefined) e também quando estava
+  // vazia mas agora há lojas disponíveis e o usuário não mexeu (cobre chamadas em sequência).
+  window._tempoEstLojaTocado=window._tempoEstLojaTocado||{};
+  const _lojaSemSel=(window._tempoEstSelLojas[regId]===undefined) ||
+                    (window._tempoEstSelLojas[regId].size===0 && lojas.length>0 && !window._tempoEstLojaTocado[regId]);
+  if(_lojaSemSel){
     window._tempoEstSelLojas[regId]=new Set(lojas);
   }
   const selLojas=window._tempoEstSelLojas[regId];
