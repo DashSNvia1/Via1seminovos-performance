@@ -3170,6 +3170,7 @@ function toggleTempoEstTipo(tipo){
 function buildTempoEstTab(regId, regionRows, name, lojaFilter){
   const cont=document.getElementById('tempo-est-tab-'+regId);
   if(!cont) return;
+  try{
   const selT=window._tempoEstSelectedTipos||new Set();
   const baseFin=regionRows.filter(r=>selT.has(r.tipo));
   const lojas=[...new Set(baseFin.map(r=>r.loja).filter(Boolean))].sort();
@@ -3282,7 +3283,8 @@ function buildTempoEstTab(regId, regionRows, name, lojaFilter){
   cont.innerHTML=
   filterBar
   +'<div style="background:#111;padding:14px 20px 12px;border-radius:3px 3px 0 0;margin-bottom:16px">'
-    +'<div style="color:#fff;font-size:17px;font-weight:700">Tempo de Estoque por Modelo — '+name+'</div>'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap"><div style="color:#fff;font-size:17px;font-weight:700">Tempo de Estoque por Modelo — '+name+'</div>'
+    +'<button onclick="exportTempoEstExcel(\''+regId+'\')" style="background:#1a7a4c;color:#fff;border:none;border-radius:3px;padding:7px 16px;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px">⬇ Exportar Excel</button></div>'
     +'<div style="color:#999;font-size:10px;text-transform:uppercase;letter-spacing:1px;margin-top:2px">Média de dias em estoque (unidades atualmente em estoque) por família'+(regId==='bace'?' · Bahia e Ceará':regId==='pepb'?' · Pernambuco e Paraíba':'')+'</div>'
   +'</div>'
   +'<div style="display:flex;gap:12px;margin-bottom:18px;flex-wrap:wrap">'
@@ -3312,6 +3314,10 @@ function buildTempoEstTab(regId, regionRows, name, lojaFilter){
       +'<tbody id="tempo-est-tbody-'+regId+'">'+_tempoEstRowsHtml(modelos,regId)+'</tbody>'
     +'</table></div>'
   +'</div>';
+  }catch(err){
+    cont.innerHTML='<div style="padding:2rem;color:#c62828;font-family:monospace;font-size:12px">Erro ao montar a aba ('+regId+'): '+err.message+'<br><br>'+(err.stack||'').split("\n").slice(0,4).join("<br>")+'</div>';
+    console.error('[TempoEstoque] erro em buildTempoEstTab', regId, err);
+  }
 }
 
 function _tempoEstTh(regId,col,label,align){
@@ -3418,6 +3424,94 @@ function _tempoEstDrillHtml(regId,i){
   h+='</tbody></table></div>';
   return h;
 }
+
+// ── Exportar Tempo de Estoque para Excel (.xls HTML com cores) ──
+function exportTempoEstExcel(regId){
+  const modelos=(window._tempoEstModelos||{})[regId]||[];
+  if(!modelos.length){ alert('Sem dados para exportar nesta regional.'); return; }
+  const regNome=regId==='bace'?'Bahia e Ceará':regId==='pepb'?'Pernambuco e Paraíba':'Geral';
+  const sheetNome=window._tempoEstName||'';
+  const fmtN=v=>(v||0).toLocaleString('pt-BR',{maximumFractionDigits:1});
+  const fmtN0=v=>(v||0).toLocaleString('pt-BR',{maximumFractionDigits:0});
+  const corDias=v=>v<30?'#1a7a4c':v<60?'#1a3c8a':v<90?'#c8921a':'#c62828';
+  const bgClass=v=>v<30?'#e8f5ee':v<60?'#e8f0fd':v<90?'#fdf5e0':'#fce8e8';
+  const rotClass=v=>v<30?'Rápido':v<60?'Normal':v<90?'Lento':'Crítico';
+
+  let h='<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">'
+    +'<head><meta charset="UTF-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet>'
+    +'<x:Name>Tempo de Estoque</x:Name><x:WorksheetOptions>'
+    +'<x:FreezePanes/><x:FrozenNoSplit/><x:SplitHorizontal>1</x:SplitHorizontal><x:TopRowBottomPane>1</x:TopRowBottomPane><x:ActivePane>2</x:ActivePane>'
+    +'<x:DisplayGridlines/></x:WorksheetOptions>'
+    +'</x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->'
+    +'<style>td{mso-number-format:"\\@";}</style></head><body>';
+  // larguras fixas (col: A#, B modelo, C qtd, D média, E min, F max, G classif, H detalhe)
+  h+='<table border="1" style="border-collapse:collapse;font-family:Arial;font-size:11px;table-layout:fixed">';
+  h+='<colgroup>'
+    +'<col style="width:34px">'
+    +'<col style="width:150px">'
+    +'<col style="width:110px">'
+    +'<col style="width:90px">'
+    +'<col style="width:80px">'
+    +'<col style="width:80px">'
+    +'<col style="width:110px">'
+    +'<col style="width:640px">'
+  +'</colgroup>';
+  // CABEÇALHO (linha 1 — será congelada)
+  const TH='background:#2a2a2a;color:#ffffff;font-weight:bold;padding:6px;text-align:center';
+  h+='<tr>'
+    +'<td style="'+TH+'">#</td>'
+    +'<td style="'+TH+';text-align:left">Modelo</td>'
+    +'<td style="'+TH+'">Qtd. em Estoque</td>'
+    +'<td style="'+TH+'">Média Dias</td>'
+    +'<td style="'+TH+'">Min Dias</td>'
+    +'<td style="'+TH+'">Max Dias</td>'
+    +'<td style="'+TH+'">Classificação</td>'
+    +'<td style="'+TH+';text-align:left">Placa / Detalhe</td>'
+  +'</tr>';
+
+  modelos.forEach((m,i)=>{
+    // linha do MODELO — rótulo das placas colado na coluna H (sem linha vazia)
+    h+='<tr>'
+      +'<td style="text-align:center;font-weight:bold;background:#f4f4f0;padding:5px">'+(i+1)+'</td>'
+      +'<td style="font-weight:bold;background:#f4f4f0;padding:5px">'+m.familia+'</td>'
+      +'<td style="text-align:center;font-weight:bold;background:#f4f4f0;padding:5px">'+m.qtd+'</td>'
+      +'<td style="text-align:center;font-weight:bold;color:'+corDias(m.mediaDias)+';background:#f4f4f0;padding:5px">'+fmtN(m.mediaDias)+' dias</td>'
+      +'<td style="text-align:center;color:#1a7a4c;background:#f4f4f0;padding:5px">'+fmtN(m.minDias)+' dias</td>'
+      +'<td style="text-align:center;color:'+corDias(m.maxDias)+';background:#f4f4f0;padding:5px">'+fmtN(m.maxDias)+' dias</td>'
+      +'<td style="text-align:center;font-weight:bold;background:'+bgClass(m.mediaDias)+';color:'+corDias(m.mediaDias)+';padding:5px">'+rotClass(m.mediaDias)+'</td>'
+      +'<td style="background:#dfe4ee;font-weight:bold;font-size:9px;padding:5px;white-space:nowrap">Placa · Loja · Ano · KM · Dias · Tipo</td>'
+    +'</tr>';
+    // linhas das PLACAS (segunda camada) — detalhe na coluna H, sem quebra
+    const placas=(m.placas||[]).slice().sort((a,b)=>(b.dias||0)-(a.dias||0));
+    placas.forEach(p=>{
+      const detalhe=[
+        (p.placa||'—'),
+        (p.loja||'—'),
+        (p.ano||'—'),
+        (p.km>0?fmtN0(p.km)+' km':'—'),
+        (p.dias||0)+' dias',
+        (p.tipo||'—')
+      ].join(' · ');
+      h+='<tr>'
+        +'<td style="background:#fbfbfa"></td><td style="background:#fbfbfa"></td><td style="background:#fbfbfa"></td>'
+        +'<td style="background:#fbfbfa"></td><td style="background:#fbfbfa"></td><td style="background:#fbfbfa"></td>'
+        +'<td style="background:#fbfbfa"></td>'
+        +'<td style="padding:3px 5px;font-size:10px;color:#333;white-space:nowrap">'
+          +'<span style="color:'+corDias(p.dias)+';font-weight:bold">■</span> '+detalhe
+        +'</td>'
+      +'</tr>';
+    });
+  });
+  h+='</table></body></html>';
+
+  const blob=new Blob(['\ufeff'+h],{type:'application/vnd.ms-excel;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  const fname='tempo_estoque_'+(sheetNome||'').replace(/[^a-zA-Z0-9]/g,'_')+'_'+regNome.replace(/[^a-zA-Z0-9]/g,'')+'.xls';
+  a.href=url; a.download=fname; document.body.appendChild(a); a.click();
+  setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(url); },100);
+}
+
 
 
 // Ordena a tabela de Giro da região visível
