@@ -3059,6 +3059,8 @@ async function loadTempoEstoqueSheet(name){
     // depois índice 31, por fim 'ESTOQUE'. Evita cair no fallback errado quando headers chegam fora de ordem.
     const _estoNome=headers.find(h=>String(h).trim().toLowerCase()==='estoque');
     const estoCol=data.estoqueCol||_estoNome||headers[31]||'Estoque';
+    const _propKey=headers[32]||'Flag Proposta';  // coluna AG
+    const _pedKey =headers[33]||'Flag Pedido';     // coluna AH
     const rows=(data.rows||[]).map(r=>{
       const modelo=String(r['MODELO']||r['Modelo']||r['modelo']||'').trim();
       const loja=String(r['EMPRESA']||r['Empresa']||r['LOJA']||r['Loja']||r['loja']||'').trim().toUpperCase();
@@ -3072,6 +3074,8 @@ async function loadTempoEstoqueSheet(name){
         km: toNum(r['KM']||r['Km']||r['km']),
         dias: toNum(r[diasCol]||0),
         tipo: tipo,
+        proposta: String(r[_propKey]||'').trim().toLowerCase()==='sim',
+        pedido: String(r[_pedKey]||'').trim().toLowerCase()==='sim',
         finalidade: SHOWROOM_TIPOS.some(t=>tipo.includes(t.split(' ')[0]))?'SHOWROOM':(String(tipo).toUpperCase().includes('REPASSE')?'REPASSE':'OUTRO')
       };
     }).filter(r=>r.familia && !r.loja.includes('NEWVIA'));
@@ -3080,7 +3084,6 @@ async function loadTempoEstoqueSheet(name){
     const tiposDaAPI = (data.tiposEstoque && data.tiposEstoque.length) ? data.tiposEstoque : null;
     const tiposDosRows = [...new Set(rows.map(r=>r.tipo).filter(Boolean))].sort();
     window._tempoEstAllTipos = tiposDaAPI || tiposDosRows;
-    console.log('[TempoEstoque] tiposEstoque(API):', data.tiposEstoque, '| tipos(rows):', tiposDosRows, '| estoCol:', estoCol, '| headers[31]:', headers[31], '| exemplo r[0]:', (data.rows||[])[0]);
     // pré-selecionados: TODOS os tipos, EXCETO Repasse (VR). Robusto a variações de nome.
     // (Re)inicializa quando ainda não há seleção OU quando a seleção está vazia mas agora há tipos disponíveis
     // — isso cobre o caso de a 1ª chamada vir sem headers (lista vazia) e a definitiva vir preenchida.
@@ -3090,7 +3093,6 @@ async function loadTempoEstoqueSheet(name){
       const ehRepasse=t=>{ const u=String(t).toUpperCase(); return u.includes('REPASSE') || /^VR\b/.test(u) || u.indexOf('VR -')!==-1; };
       const defaultTipos=window._tempoEstAllTipos.filter(t=>!ehRepasse(t));
       window._tempoEstSelectedTipos=new Set(defaultTipos.length?defaultTipos:window._tempoEstAllTipos);
-      console.log('[TempoEstoque] tipos disponíveis:', window._tempoEstAllTipos, '| pré-marcados:', [...window._tempoEstSelectedTipos]);
     }
     renderTempoEstoque(rows,name);
   }catch(e){
@@ -3167,12 +3169,26 @@ function toggleTempoEstTipo(tipo){
   setTimeout(()=>{ const dd=document.getElementById('tempoEstTipoDD'); if(dd){ dd.style.display='block'; dd.scrollTop=sc; } },0);
 }
 
+function toggleTempoEstPP(qual,checked){
+  if(qual==='proposta') window._tempoEstIncluirProposta=checked;
+  else if(qual==='pedido') window._tempoEstIncluirPedido=checked;
+  renderTempoEstoque(window._tempoEstoqueRows||[], window._tempoEstName||'');
+}
+
 function buildTempoEstTab(regId, regionRows, name, lojaFilter){
   const cont=document.getElementById('tempo-est-tab-'+regId);
   if(!cont) return;
-  try{
   const selT=window._tempoEstSelectedTipos||new Set();
-  const baseFin=regionRows.filter(r=>selT.has(r.tipo));
+  // filtro Proposta/Pedido: padrão = EXCLUIR ambos (só estoque livre). Undefined => inicializa false.
+  if(window._tempoEstIncluirProposta===undefined) window._tempoEstIncluirProposta=false;
+  if(window._tempoEstIncluirPedido===undefined) window._tempoEstIncluirPedido=false;
+  const incProp=window._tempoEstIncluirProposta, incPed=window._tempoEstIncluirPedido;
+  const baseFin=regionRows.filter(r=>{
+    if(!selT.has(r.tipo)) return false;
+    if(r.proposta && !incProp) return false;
+    if(r.pedido   && !incPed)  return false;
+    return true;
+  });
   const lojas=[...new Set(baseFin.map(r=>r.loja).filter(Boolean))].sort();
   // multi-seleção de lojas: inicializa "todas" na 1ª vez (undefined) e também quando estava
   // vazia mas agora há lojas disponíveis e o usuário não mexeu (cobre chamadas em sequência).
@@ -3221,17 +3237,20 @@ function buildTempoEstTab(regId, regionRows, name, lojaFilter){
 
   const kpi=(l,v,bg,cx)=>'<div style="flex:1;min-width:150px;background:'+(bg||'#fff')+';border:1px solid var(--border);border-radius:3px;padding:.7rem 1.2rem"><p style="font-size:10px;color:var(--muted);margin:0 0 2px;text-transform:uppercase;letter-spacing:.5px;font-weight:600">'+l+'</p><p style="font-size:20px;font-weight:700;margin:0;color:'+(cx||'var(--ink)')+'">'+v+'</p></div>';
 
-  const maxDias=Math.max(...modelos.map(m=>m.mediaDias),1);
-  const barras=modelos.map(m=>{
-    const w=Math.max(Math.round(m.mediaDias/maxDias*100),4);
+  // gráfico de barras: TAMANHO = quantidade em estoque, ordenado da maior qtd para a menor.
+  // Dias médios viram texto colorido à direita (cor pela faixa de dias).
+  const modelosPorQtd=[...modelos].sort((a,b)=>b.qtd-a.qtd);
+  const maxQtd=Math.max(...modelosPorQtd.map(m=>m.qtd),1);
+  const barras=modelosPorQtd.map(m=>{
+    const w=Math.max(Math.round(m.qtd/maxQtd*100),4);
     return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:7px">'
       +'<div style="width:120px;text-align:right;font-size:12px;font-weight:600;flex-shrink:0">'+m.familia+'</div>'
       +'<div style="flex:1;background:#f0efe9;border-radius:2px;height:22px;position:relative;overflow:hidden">'
         +'<div style="width:'+w+'%;background:'+diasCol(m.mediaDias)+';height:100%;border-radius:2px;display:flex;align-items:center;padding-left:8px">'
-          +'<span style="color:#fff;font-size:11px;font-weight:700">'+fmtN(m.mediaDias)+'d</span>'
+          +'<span style="color:#fff;font-size:11px;font-weight:700">'+m.qtd+' un.</span>'
         +'</div>'
       +'</div>'
-      +'<div style="width:70px;font-size:11px;color:var(--muted);flex-shrink:0">'+m.qtd+' un.</div>'
+      +'<div style="width:90px;font-size:11px;font-weight:700;color:'+diasCol(m.mediaDias)+';flex-shrink:0;text-align:right">'+fmtN(m.mediaDias)+' dias</div>'
       +'</div>';
   }).join('');
 
@@ -3274,9 +3293,17 @@ function buildTempoEstTab(regId, regionRows, name, lojaFilter){
         +'<input type="checkbox" '+(selLojas.has(l)?'checked':'')+' onchange="toggleTempoEstLoja(\''+regId+'\',\''+l.replace(/'/g,"\\'")+'\')">'
         +'<span style="flex:1">'+l+'</span></label>').join('')
     +'</div></div>';
+  const chkPP='<div style="display:flex;align-items:center;gap:14px;padding:0 6px;border-left:1px solid var(--border2);margin-left:2px">'
+    +'<span style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--muted)">Pedido / Proposta</span>'
+    +'<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px">'
+      +'<input type="checkbox" '+(incProp?'checked':'')+' onchange="toggleTempoEstPP(\'proposta\',this.checked)"><span>Incluir em Proposta</span></label>'
+    +'<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px">'
+      +'<input type="checkbox" '+(incPed?'checked':'')+' onchange="toggleTempoEstPP(\'pedido\',this.checked)"><span>Incluir em Pedido</span></label>'
+  +'</div>';
   const filterBar='<div style="background:#f5f4f0;border:1px solid var(--border);border-radius:3px;padding:8px 12px;margin-bottom:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">'
     +lojaDD
     +tipoDD
+    +chkPP
     +((selLojas.size!==lojas.length)?'<span style="font-size:11px;color:var(--muted)">Mostrando <b style="color:var(--ink)">'+base.length+'</b> de <b style="color:var(--ink)">'+baseFin.length+'</b></span>':'')
   +'</div>';
 
@@ -3290,13 +3317,13 @@ function buildTempoEstTab(regId, regionRows, name, lojaFilter){
   +'<div style="display:flex;gap:12px;margin-bottom:18px;flex-wrap:wrap">'
     +kpi('Unidades em Estoque',totalQtd.toLocaleString('pt-BR'))
     +kpi('Média Global',fmtN(globalMedia)+' dias','#eef4fd','var(--blue)')
-    +kpi('Giro Rápido (<30d)',rapidos+' modelos','#e8f5ee','var(--green)')
-    +kpi('Parado (≥60d)',lentos+' modelos','#fce8e8','var(--red)')
+    +kpi('Giro Rápido (&lt;30d) <span style="color:#1a7a4c;font-weight:700">Poucos dias</span>',rapidos+' modelos','#e8f5ee','var(--green)')
+    +kpi('Parado (≥60d) <span style="color:#c62828;font-weight:700">Mais dias</span>',lentos+' modelos','#fce8e8','var(--red)')
     +kpi('Mais Novo',maisNovo,'#fff','var(--green)')
     +kpi('Mais Antigo',maisVelho,'#fff','var(--red)')
   +'</div>'
   +'<div style="background:#fff;border:1px solid var(--border);border-radius:3px;padding:16px 20px;margin-bottom:18px">'
-    +'<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;color:var(--muted)">Média de dias em estoque por modelo (do mais novo ao mais antigo)</div>'
+    +'<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;color:var(--muted)">Quantidade em estoque por modelo (da maior para a menor) · dias médios à direita</div>'
     +barras
   +'</div>'
   +'<div style="border:1px solid var(--border);border-radius:3px;overflow:hidden">'
@@ -3314,10 +3341,6 @@ function buildTempoEstTab(regId, regionRows, name, lojaFilter){
       +'<tbody id="tempo-est-tbody-'+regId+'">'+_tempoEstRowsHtml(modelos,regId)+'</tbody>'
     +'</table></div>'
   +'</div>';
-  }catch(err){
-    cont.innerHTML='<div style="padding:2rem;color:#c62828;font-family:monospace;font-size:12px">Erro ao montar a aba ('+regId+'): '+err.message+'<br><br>'+(err.stack||'').split("\n").slice(0,4).join("<br>")+'</div>';
-    console.error('[TempoEstoque] erro em buildTempoEstTab', regId, err);
-  }
 }
 
 function _tempoEstTh(regId,col,label,align){
@@ -4513,6 +4536,12 @@ function setEstoqueOp(op) {
   _applyEstoqueFilters();
 }
 
+function toggleEstoquePP(qual,checked){
+  if(qual==='proposta') window._estoqueIncluirProposta=checked;
+  else if(qual==='pedido') window._estoqueIncluirPedido=checked;
+  _applyEstoqueFilters();
+}
+
 function _applyEstoqueFilters() {
   // Lojas selecionadas
   const lojasCbs = document.querySelectorAll('.estoque-loja-cb');
@@ -4522,6 +4551,19 @@ function _applyEstoqueFilters() {
   if(selectedLojas.size && selectedLojas.size < _estoqueRawRows.map(r=>r.loja).filter((v,i,a)=>a.indexOf(v)===i).length)
     filtered = filtered.filter(r => selectedLojas.has(r.loja));
 
+  // base ANTES do filtro proposta/pedido — usada pelos cards "Com Proposta/Pedido"
+  const filteredBase = filtered;
+
+  // filtro Pedido/Proposta (padrão: exclui ambos — só estoque livre)
+  if(window._estoqueIncluirProposta===undefined) window._estoqueIncluirProposta=false;
+  if(window._estoqueIncluirPedido===undefined) window._estoqueIncluirPedido=false;
+  const _incP=window._estoqueIncluirProposta, _incPed=window._estoqueIncluirPedido;
+  filtered = filtered.filter(r=>{
+    if(r.proposta && !_incP) return false;
+    if(r.pedido && !_incPed) return false;
+    return true;
+  });
+
   // Atualiza label estoque
   const labelEl = document.getElementById('estoqueFilterLabel');
   if(labelEl) labelEl.textContent = _estoqueSelectedTipos.size === _estoqueAllTipos.length ? 'Todos os estoques' : `${_estoqueSelectedTipos.size} selecionado${_estoqueSelectedTipos.size>1?'s':''}`;
@@ -4530,7 +4572,7 @@ function _applyEstoqueFilters() {
   const lojaLbl = document.getElementById('estoqueLojasLabel');
   if(lojaLbl) lojaLbl.textContent = selectedLojas.size === lojasCbs.length ? 'Todas' : `${selectedLojas.size} selecionada${selectedLojas.size>1?'s':''}`;
 
-  _renderEstoqueKpis(filtered);
+  _renderEstoqueKpis(filtered, filteredBase);
   _renderEstoqueCharts(filtered);
   _renderEstoqueTables(filtered);
 }
@@ -4641,6 +4683,15 @@ function renderEstoque(rows, name) {
           }).join('')}
         </div>
       </div>
+
+      <!-- Filtro Pedido / Proposta -->
+      <div style="display:flex;align-items:center;gap:14px;padding-left:14px;border-left:1px solid var(--border2)">
+        <span style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--muted)">Pedido / Proposta</span>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px">
+          <input type="checkbox" id="estoqueIncProposta" ${window._estoqueIncluirProposta?'checked':''} onchange="toggleEstoquePP('proposta',this.checked)"><span>Incluir em Proposta</span></label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px">
+          <input type="checkbox" id="estoqueIncPedido" ${window._estoqueIncluirPedido?'checked':''} onchange="toggleEstoquePP('pedido',this.checked)"><span>Incluir em Pedido</span></label>
+      </div>
     </div>
 
     <!-- KPIs -->
@@ -4709,16 +4760,17 @@ function isLojaPEpb(loja) {
   return KW_PEPB.some(k => u.includes(k));
 }
 
-function _renderEstoqueKpis(filtered) {
+function _renderEstoqueKpis(filtered, filteredBase) {
+  filteredBase = filteredBase || filtered;
   const baceRows = filtered.filter(r => isEstoqueBAce(r.loja));
   const pepbRows = filtered.filter(r => isEstoquePEpb(r.loja));
   const el = document.getElementById('estoqueKpis');
   if(!el) return;
 
-  // Carro com pedido não contabiliza proposta
-  const totalProposta = filtered.filter(r => r.proposta && !r.pedido).length;
-  const totalPedido   = filtered.filter(r => r.pedido).length;
-  const totalAmbos    = filtered.filter(r => (r.proposta && !r.pedido) || r.pedido).length;
+  // Carro com pedido não contabiliza proposta — contados sobre a base (antes do filtro PP)
+  const totalProposta = filteredBase.filter(r => r.proposta && !r.pedido).length;
+  const totalPedido   = filteredBase.filter(r => r.pedido).length;
+  const totalAmbos    = filteredBase.filter(r => (r.proposta && !r.pedido) || r.pedido).length;
 
   const kpi = (label, val, color) => `
     <div style="background:var(--paper);border:1px solid var(--border);border-radius:3px;padding:.75rem 1.25rem;min-width:130px">
