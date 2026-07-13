@@ -811,15 +811,59 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 // ── JSONP ─────────────────────────────────────────────────────────────────────
-function jsonp(baseUrl, params) {
+// cache curto + dedup de chamadas em andamento (reduz pedidos repetidos ao Google)
+window._jsonpCache = window._jsonpCache || {};      // chave -> {ts, data}
+window._jsonpInflight = window._jsonpInflight || {}; // chave -> Promise em andamento
+var JSONP_CACHE_MS = 8000; // reusa resultado idêntico por até 8s
+
+function _jsonpKey(baseUrl, params){
+  return baseUrl + '::' + Object.entries(params).map(([k,v])=>k+'='+v).join('&');
+}
+
+function jsonp(baseUrl, params, _opts) {
+  _opts = _opts || {};
+  const chave = _jsonpKey(baseUrl, params);
+  // ignora cache/dedup para __sheets__ só se forçado; por padrão aproveita
+  if(!_opts.noCache){
+    const c = window._jsonpCache[chave];
+    if(c && (Date.now()-c.ts) < JSONP_CACHE_MS){ return Promise.resolve(c.data); }
+    if(window._jsonpInflight[chave]) return window._jsonpInflight[chave]; // já tem uma igual voando
+  }
+  const p = _jsonpRaw(baseUrl, params, 1).then(data => {
+    window._jsonpCache[chave] = {ts: Date.now(), data: data};
+    delete window._jsonpInflight[chave];
+    return data;
+  }, err => {
+    delete window._jsonpInflight[chave];
+    throw err;
+  });
+  if(!_opts.noCache) window._jsonpInflight[chave] = p;
+  return p;
+}
+
+function _jsonpRaw(baseUrl, params, _tentativa) {
+  _tentativa = _tentativa || 1;
+  const MAX_TENTATIVAS = 3;
+  const TIMEOUT_MS = 25000;
   return new Promise((resolve, reject) => {
     const cb = 'cb_' + Date.now() + '_' + Math.random().toString(36).substr(2,6);
     const qs = Object.entries(params).map(([k,v]) => k+'='+encodeURIComponent(v)).join('&');
     const url = baseUrl + (baseUrl.includes('?')?'&':'?') + qs + '&callback=' + cb;
-    window[cb] = data => { delete window[cb]; if(s.parentNode) s.parentNode.removeChild(s); resolve(data); };
+    let terminado = false;
+    const limpar = () => { try{ delete window[cb]; }catch(e){ window[cb]=undefined; } if(s.parentNode) s.parentNode.removeChild(s); };
+    const falhar = (msg) => {
+      if(terminado) return; terminado = true; limpar();
+      if(_tentativa < MAX_TENTATIVAS){
+        setTimeout(() => { _jsonpRaw(baseUrl, params, _tentativa+1).then(resolve, reject); }, 600*_tentativa);
+      } else {
+        reject(new Error(msg + ' (após ' + MAX_TENTATIVAS + ' tentativas)'));
+      }
+    };
+    const tmr = setTimeout(() => falhar('Tempo esgotado ao carregar dados'), TIMEOUT_MS);
+    window[cb] = data => { if(terminado) return; terminado = true; clearTimeout(tmr); limpar(); resolve(data); };
     const s = document.createElement('script');
     s.src = url;
-    s.onerror = () => { delete window[cb]; reject(new Error('Falha ao carregar script: ' + url)); };
+    s.onerror = () => { clearTimeout(tmr); falhar('Falha ao carregar script: ' + url); };
     document.head.appendChild(s);
   });
 }
@@ -1074,15 +1118,35 @@ async function loadSheet(name) {
     document.getElementById('contentVendas').style.display='block';
     document.getElementById('loadingVendas').style.display='none';
     showTab('geral',false);
+    window._vendasSheetAtual = name; // guarda a aba atual p/ auto-refresh
     // Cruza com o estoque do mesmo mês (assíncrono; preenche a coluna "Em Estoque")
     // Isolado: se a API de estoque falhar, NÃO trava a aba Vendas.
     try { Promise.resolve(loadEstoqueForVendas(name)).catch(()=>{ window._estoqueStockRows=[]; }); } catch(e){ window._estoqueStockRows=[]; }
     // Atualiza Top 10 se a aba estiver visível
     if(document.getElementById('pageVendaTop10')?.style.display==='block') initVendaTop10Page();
+    _agendarAutoRefreshVendas();
   } catch(e) {
     setStatus('red','Erro: '+e.message);
     document.getElementById('loadingVendas').style.display='none';
   }
+}
+
+// ── Auto-refresh da base de Vendas a cada 10 min (segundo plano) ──
+window._autoRefreshVendasTimer = window._autoRefreshVendasTimer || null;
+function _agendarAutoRefreshVendas(){
+  if(window._autoRefreshVendasTimer) return; // já agendado
+  window._autoRefreshVendasTimer = setInterval(()=>{
+    const name = window._vendasSheetAtual;
+    if(!name || !API_VENDAS) return;
+    // só atualiza se a aba de Vendas estiver visível OU se nenhuma outra pesada estiver aberta
+    // invalida o cache dessa aba para buscar dados frescos
+    try{
+      const chave=_jsonpKey(API_VENDAS,{sheet:name});
+      if(window._jsonpCache) delete window._jsonpCache[chave];
+    }catch(e){}
+    // recarrega (loadSheet re-renderiza a aba de vendas com dados frescos)
+    Promise.resolve(loadSheet(name)).catch(()=>{});
+  }, 10*60*1000); // 10 minutos
 }
 
 function aggregate(rows) {
