@@ -6937,16 +6937,173 @@ function loadAval2Sheet(name){
   }).catch(e=>{ body.innerHTML='<div style="padding:2rem;color:var(--red)">Erro: '+e.message+'</div>'; });
 }
 
-function _av2Filtered(){
+function _av2FilteredBase(){
   const pl=_av2Placa.trim().toUpperCase();
-  const base=_av2Rows.filter(r=>{
+  return _av2Rows.filter(r=>{
     for(const [k] of _AV2_DIMS){ if(!_av2Sel[k].has(r[k])) return false; }
     if(_av2Periodo.ini && r.data && r.data < _av2Periodo.ini) return false;
     if(_av2Periodo.fim && r.data && r.data > _av2Periodo.fim) return false;
     if(pl && r.placa.indexOf(pl)===-1) return false;
     return true;
   });
-  return _av2DedupPlaca(base);
+}
+function _av2Filtered(){
+  return _av2DedupPlaca(_av2FilteredBase());
+}
+
+// Agrupa as placas que aparecem MAIS DE UMA VEZ na base filtrada (antes da dedup).
+// A linha MANTIDA é exatamente a que a dedup preserva (maior Data de Criação);
+// as demais são as DESCARTADAS. Placas em branco não são agrupadas.
+function _av2DupGroups(base){
+  const kept=_av2DedupPlaca(base);
+  const keptByPlaca={};
+  kept.forEach(r=>{ const p=(r.placa||'').trim().toUpperCase(); if(p && p!=='—') keptByPlaca[p]=r; });
+  const byPlaca={};
+  base.forEach(r=>{
+    const p=(r.placa||'').trim().toUpperCase();
+    if(!p || p==='—') return;
+    (byPlaca[p]=byPlaca[p]||[]).push(r);
+  });
+  const dups=[];
+  Object.entries(byPlaca).forEach(([p,arr])=>{
+    if(arr.length>1){
+      const ord=arr.slice().sort((a,b)=>String(b.data||'').localeCompare(String(a.data||'')));
+      dups.push({placa:p, n:arr.length, ocorrencias:ord, mantida:keptByPlaca[p]});
+    }
+  });
+  dups.sort((a,b)=>(b.n-a.n) || String(a.placa).localeCompare(String(b.placa)));
+  return dups;
+}
+
+// data no padrão aaaa-mm-dd (ou aaaa-mm-ddThh) → dd/mm/aaaa; devolve como veio se não casar
+function _av2FmtData(s){
+  s=String(s||'').trim();
+  const m=s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? (m[3]+'/'+m[2]+'/'+m[1]) : (s||'—');
+}
+
+// Painel colapsável com o antes × depois das placas duplicadas
+window._av2DupOpen = window._av2DupOpen || false;
+function toggleAv2DupPanel(){
+  window._av2DupOpen=!window._av2DupOpen;
+  const p=document.getElementById('av2-dup');
+  if(p) p.innerHTML=_av2DupPanel(window._av2DupGroupsCache||[]);
+  if(window._av2DupOpen && p){ p.scrollIntoView({behavior:'smooth',block:'nearest'}); }
+}
+function _av2DupPanel(groups){
+  const nPlacas=groups.length;
+  const nAntes=groups.reduce((s,g)=>s+g.n,0);
+  const nRem=nAntes-nPlacas;
+  const wrap='border:1px solid var(--border);border-radius:3px;overflow:hidden';
+  const head='background:#1e1e1e;color:#fff;padding:8px 14px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;cursor:pointer';
+  const seta=window._av2DupOpen?'▾':'▸';
+  let h='<div style="'+wrap+'">'
+    +'<div style="'+head+'" onclick="toggleAv2DupPanel()">'
+      +'<span>'+seta+' Placas Duplicadas — antes × depois</span>'
+      +'<span style="font-weight:400;text-transform:none;font-size:10px;opacity:.85">'
+        +_av2N(nPlacas)+' placa(s) · '+_av2N(nAntes)+' linhas antes → '+_av2N(nPlacas)+' depois · '+_av2N(nRem)+' removida(s)'
+      +'</span>';
+  if(nPlacas>0){
+    h+='<button onclick="event.stopPropagation();exportAv2Dup()" style="margin-left:auto;background:#1a7a4c;border:none;color:#fff;border-radius:3px;padding:4px 12px;font-size:10px;font-weight:700;cursor:pointer;text-transform:none">⬇ Excel</button>';
+  }
+  h+='</div>';
+  if(!window._av2DupOpen){ h+='</div>'; return h; }
+
+  if(!nPlacas){
+    h+='<div style="padding:14px;color:var(--muted);font-size:12px">Nenhuma placa duplicada na base filtrada. Cada placa aparece uma única vez.</div></div>';
+    return h;
+  }
+  const TH='background:#1a2a48;color:#fff;padding:7px 10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap';
+  const TD='padding:6px 10px;font-size:11px;white-space:nowrap;border-bottom:1px solid #eceff5';
+  h+='<div class="tbl-wrap"><table style="width:100%;min-width:1050px;border-collapse:collapse"><thead><tr>'
+    +'<th style="'+TH+';text-align:left">Placa</th>'
+    +'<th style="'+TH+';text-align:center">Situação</th>'
+    +'<th style="'+TH+';text-align:left">Data Criação</th>'
+    +'<th style="'+TH+';text-align:left">Loja</th>'
+    +'<th style="'+TH+';text-align:left">Avaliador</th>'
+    +'<th style="'+TH+';text-align:left">Status</th>'
+    +'<th style="'+TH+';text-align:left">Modelo</th>'
+    +'<th style="'+TH+';text-align:right">Valor Aval.</th>'
+    +'<th style="'+TH+';text-align:right">FIPE</th>'
+    +'<th style="'+TH+';text-align:right">KM</th>'
+    +'</tr></thead><tbody>';
+  groups.forEach((g,gi)=>{
+    const zebra=(gi%2===0)?'#fff':'#f6f8fc';
+    g.ocorrencias.forEach((r,i)=>{
+      const mantida=(r===g.mantida);
+      const bg=mantida?'#eaf7ef':zebra;
+      const sit=mantida
+        ? '<span style="background:#1a7a4c;color:#fff;border-radius:2px;padding:1px 6px;font-size:9px;font-weight:700">MANTIDA</span>'
+        : '<span style="background:#c62828;color:#fff;border-radius:2px;padding:1px 6px;font-size:9px;font-weight:700">DESCARTADA</span>';
+      const placaCell=(i===0)
+        ? '<td style="'+TD+';font-weight:700" rowspan="'+g.n+'">'+g.placa+' <span style="font-weight:400;color:var(--muted)">('+g.n+'×)</span></td>'
+        : '';
+      const dim=mantida?'':'color:#999';
+      h+='<tr style="background:'+bg+'">'
+        +placaCell
+        +'<td style="'+TD+';text-align:center">'+sit+'</td>'
+        +'<td style="'+TD+';'+dim+'">'+_av2FmtData(r.data)+'</td>'
+        +'<td style="'+TD+';'+dim+'">'+(r.loja||'—')+'</td>'
+        +'<td style="'+TD+';'+dim+'">'+(r.avaliador||'—')+'</td>'
+        +'<td style="'+TD+';'+dim+'">'+(r.status||'—')+'</td>'
+        +'<td style="'+TD+';'+dim+'">'+(r.modelo||'—')+'</td>'
+        +'<td style="'+TD+';text-align:right;'+dim+'">'+(r.valorAval>0?_av2RS(r.valorAval):'—')+'</td>'
+        +'<td style="'+TD+';text-align:right;'+dim+'">'+(r.fipe>0?_av2RS(r.fipe):'—')+'</td>'
+        +'<td style="'+TD+';text-align:right;'+dim+'">'+(r.km>0?_av2N(r.km)+' km':'—')+'</td>'
+        +'</tr>';
+    });
+  });
+  h+='</tbody></table></div>'
+    +'<div style="font-size:10px;color:var(--muted);padding:6px 12px">'
+    +'Linha verde <b>MANTIDA</b> = a que a dedup preserva (maior Data de Criação). Linhas <b>DESCARTADAS</b> não entram em nenhum cálculo da aba. Respeita os filtros ativos.'
+    +'</div></div>';
+  return h;
+}
+
+// Export .xls (HTML) das placas duplicadas — antes × depois
+function exportAv2Dup(){
+  const groups=window._av2DupGroupsCache||[];
+  if(!groups.length){ alert('Não há placas duplicadas para exportar na base filtrada.'); return; }
+  const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  let rowsHtml='';
+  groups.forEach(g=>{
+    g.ocorrencias.forEach(r=>{
+      const sit=(r===g.mantida)?'MANTIDA':'DESCARTADA';
+      const cor=(sit==='MANTIDA')?'#eaf7ef':'#ffffff';
+      rowsHtml+='<tr style="background:'+cor+'">'
+        +'<td style="mso-number-format:\'@\'">'+esc(g.placa)+'</td>'
+        +'<td>'+esc(g.n)+'</td>'
+        +'<td>'+sit+'</td>'
+        +'<td style="mso-number-format:\'@\'">'+esc(_av2FmtData(r.data))+'</td>'
+        +'<td>'+esc(r.loja)+'</td>'
+        +'<td>'+esc(r.avaliador)+'</td>'
+        +'<td>'+esc(r.status)+'</td>'
+        +'<td>'+esc(r.modelo)+'</td>'
+        +'<td>'+esc(r.finalidade)+'</td>'
+        +'<td>'+esc(r.classif)+'</td>'
+        +'<td>'+(r.valorAval||0)+'</td>'
+        +'<td>'+(r.fipe||0)+'</td>'
+        +'<td>'+(r.km||0)+'</td>'
+        +'</tr>';
+    });
+  });
+  const nPlacas=groups.length, nAntes=groups.reduce((s,g)=>s+g.n,0);
+  const cab='<tr style="background:#1a2a48;color:#fff;font-weight:bold">'
+    +['Placa','Ocorrências','Situação','Data Criação','Loja','Avaliador','Status','Modelo','Finalidade','Classificação','Valor Aval.','FIPE','KM']
+      .map(c=>'<td>'+c+'</td>').join('')+'</tr>';
+  const resumo='<tr><td colspan="13" style="font-weight:bold;background:#f0f0f0">Placas duplicadas: '+nPlacas
+    +' · Linhas antes: '+nAntes+' · Depois (dedup): '+nPlacas+' · Removidas: '+(nAntes-nPlacas)+'</td></tr>';
+  const html='<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">'
+    +'<head><meta charset="utf-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet>'
+    +'<x:Name>Placas Duplicadas</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>'
+    +'</x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head>'
+    +'<body><table border="1" cellspacing="0">'+resumo+cab+rowsHtml+'</table></body></html>';
+  const blob=new Blob(['\ufeff'+html],{type:'application/vnd.ms-excel'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download='placas_duplicadas_'+(_av2Sheet||'').replace(/[^a-zA-Z0-9]/g,'_')+'.xls';
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(url); },100);
 }
 
 // Dedup GLOBAL por placa: mantém a avaliação de MAIOR Data de Criação (coluna E).
@@ -7045,6 +7202,7 @@ function renderAval2Shell(){
       '<button onclick="resetAv2Filtros()" style="background:#fff;border:1px solid var(--border2);border-radius:3px;padding:6px 12px;font-size:11px;font-weight:600;cursor:pointer">Limpar filtros</button>'+
     '</div>'+
     '<div id="av2-kpis" style="display:flex;gap:12px;margin-bottom:18px;flex-wrap:wrap"></div>'+
+    '<div id="av2-dup" style="margin-bottom:20px"></div>'+
     '<div id="av2-praca" style="margin-bottom:20px"></div>'+
     '<div id="av2-audit" style="margin-bottom:20px"></div>'+
     '<div id="av2-mix" style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:0"></div>'+
@@ -7416,12 +7574,23 @@ function renderAval2Content(){
   const avaliadores=new Set(rows.map(r=>r.avaliador)).size;
   const lojas=new Set(rows.map(r=>r.loja)).size;
 
+  // ── Placas duplicadas (comparação antes × depois da dedup) ──
+  const _baseDup=_av2FilteredBase();                         // antes da dedup (mesmos filtros)
+  const _dupGroups=_av2DupGroups(_baseDup);                  // só placas com +1 ocorrência
+  const dupPlacas=_dupGroups.length;                         // qtd de placas duplicadas
+  const dupLinhasAntes=_dupGroups.reduce((s,g)=>s+g.n,0);    // total de linhas dessas placas (antes)
+  const dupRemovidas=dupLinhasAntes-dupPlacas;               // linhas eliminadas pela dedup
+  window._av2DupGroupsCache=_dupGroups;                      // p/ o painel e o export
+  const dupPanel=document.getElementById('av2-dup');
+  if(dupPanel) dupPanel.innerHTML=_av2DupPanel(_dupGroups);
+
   const kCard=(l,v,c,tt)=>'<div style="background:#fff;border:1px solid var(--border);border-left:3px solid '+c+';border-radius:3px;padding:.6rem 1.1rem;min-width:125px"'+(tt?' title="'+tt.replace(/"/g,'&quot;')+'"':'')+'><p style="font-size:10px;color:var(--muted);margin:0 0 2px;text-transform:uppercase;letter-spacing:.5px;font-weight:600">'+l+'</p><p style="font-size:19px;font-weight:700;margin:0">'+v+'</p></div>';
   if(kpi) kpi.innerHTML=
     kCard('Total Avaliações',_av2N(total),'#1a3c8a','Total de avaliações VÁLIDAS (≥ R$ 1 mil). As abaixo de R$ 1 mil não entram aqui.')+
     kCard('% Pago',pctPago>0?_av2Pct1(pctPago):'—','#c62828','Média de Valor Avaliado (U) ÷ FIPE (AE), avaliações ≥ R$ 1 mil com FIPE')+
     kCard('Ticket Médio',ticket>0?_av2RS(ticket):'—','#1a7a4c','Média do Valor Avaliado (≥ R$ 1 mil)')+
     kCard('Abaixo de R$ 1 mil',_av2N(abaixo1k),'#777','Avaliações com Valor Avaliado (U) < R$ 1.000 — contadas SÓ aqui; não entram no Total nem em nenhum outro cálculo')+
+    '<div onclick="toggleAv2DupPanel()" style="cursor:pointer;background:#fff;border:1px solid var(--border);border-left:3px solid #b8860b;border-radius:3px;padding:.6rem 1.1rem;min-width:125px" title="Placas que aparecem mais de uma vez na base filtrada. A dedup mantém a de maior Data de Criação e descarta as demais. Clique para ver o detalhe antes × depois."><p style="font-size:10px;color:var(--muted);margin:0 0 2px;text-transform:uppercase;letter-spacing:.5px;font-weight:600">Placas Duplicadas</p><p style="font-size:19px;font-weight:700;margin:0">'+_av2N(dupPlacas)+' <span style="font-size:10px;font-weight:600;color:#b8860b">▾ detalhe</span></p><p style="font-size:9px;color:var(--muted);margin:2px 0 0">−'+_av2N(dupRemovidas)+' linha(s) na dedup</p></div>'+
     kCard('SHOWROOM',_av2N(showroom)+' ('+_av2Pct(showroom,total)+'%)','#6a1a7a')+
     kCard('REPASSE',_av2N(repasse)+' ('+_av2Pct(repasse,total)+'%)','#c8921a')+
     kCard('Avaliadores',_av2N(avaliadores),'#1a6a7a')+
