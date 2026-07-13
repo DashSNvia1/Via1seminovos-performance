@@ -7072,17 +7072,23 @@ function _av2GroupBy(rows,key){
 }
 
 // ── Tabela por Praça (Estado) — só SHOWROOM ──
-let _av2Limiar = 0.804; // corte de % pago (editável no painel; padrão 80,4%)
-function setAv2Limiar(v){
+let _av2LimMin = 0.75; // faixa de % pago — mínimo (editável no painel; padrão 75,0%)
+let _av2LimMax = 0.81; // faixa de % pago — máximo (editável no painel; padrão 81,0%)
+function setAv2LimMin(v){
   const n = parseFloat(String(v).replace(',','.'));
-  if(!isNaN(n) && n>0) _av2Limiar = n/100;
+  if(!isNaN(n) && n>0) _av2LimMin = n/100;
+  renderAval2Content();
+}
+function setAv2LimMax(v){
+  const n = parseFloat(String(v).replace(',','.'));
+  if(!isNaN(n) && n>0) _av2LimMax = n/100;
   renderAval2Content();
 }
 
 function _av2PracaTable(rowsFiltrados){
   const rows = rowsFiltrados.filter(r=>r.finalidade==='SHOWROOM');
   if(!rows.length) return '';
-  const lim=_av2Limiar;
+  const limMin=_av2LimMin, limMax=_av2LimMax;
   const porEstado={};
   rows.forEach(r=>{
     const e=r.estado||'(sem estado)';
@@ -7095,7 +7101,7 @@ function _av2PracaTable(rowsFiltrados){
         const pct=r.valorAval/r.fipe;
         if(pct<=3){
           P.somaPct+=pct; P.nPct++;
-          if(pct>lim) P.acima++;
+          if(pct>=limMin && pct<=limMax) P.acima++;
         }
       }
     }
@@ -7105,7 +7111,7 @@ function _av2PracaTable(rowsFiltrados){
   arr.forEach(([,P])=>{T.aval+=P.aval;T.acima+=P.acima;T.somaPct+=P.somaPct;T.nPct+=P.nPct;T.somaVal+=P.somaVal;T.nVal+=P.nVal;});
 
   // guarda as placas por praça para o drill-down.
-  // Regra: praça normal = só placas acima do corte; "(sem estado)" = TODAS (diagnóstico).
+  // Regra: praça normal = só placas dentro da faixa de % pago; "(sem estado)" = TODAS (diagnóstico).
   window._av2PracaDrill={};
   rows.forEach(r=>{
     if(!(r.valorAval>=1000 && r.valorAval<=2000000)) return;
@@ -7113,9 +7119,9 @@ function _av2PracaTable(rowsFiltrados){
     const semEstado=(e==='(sem estado)');
     let pct=null;
     if(r.fipe>0){ const _p=r.valorAval/r.fipe; if(_p<=3) pct=_p; }
-    // praça normal: precisa de pct válido e acima do corte; sem estado: entra sempre
+    // praça normal: precisa de pct válido e dentro da faixa; sem estado: entra sempre
     if(!semEstado){
-      if(pct===null || pct<=lim) return;
+      if(pct===null || pct<limMin || pct>limMax) return;
     }
     (window._av2PracaDrill[e]=window._av2PracaDrill[e]||[]).push({
       placa:r.placa||'—', modelo:r.modelo||'—', pct:(pct===null?0:pct),
@@ -7124,7 +7130,8 @@ function _av2PracaTable(rowsFiltrados){
     });
   });
 
-  const limLabel=(lim*100).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+'%';
+  const fmtLim=v=>(v*100).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+'%';
+  const faixaLabel=fmtLim(limMin)+' – '+fmtLim(limMax);
   const TH='background:#1a2a48;color:#fff;padding:8px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap';
   const TD='padding:7px 12px;white-space:nowrap';
   const fila=(nome,P,destaque,clicavel)=>{
@@ -7146,18 +7153,21 @@ function _av2PracaTable(rowsFiltrados){
   };
   let h='<div style="border:1px solid var(--border);border-radius:3px;overflow:hidden">'
     +'<div style="background:#1e1e1e;color:#fff;padding:8px 14px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
-      +'<span>Por Praça — SHOWROOM</span>'
-      +'<span style="font-weight:400;text-transform:none;font-size:10px;opacity:.8">corte % pago:</span>'
-      +'<input type="number" step="0.1" min="1" max="200" value="'+(lim*100).toFixed(1)+'" onchange="setAv2Limiar(this.value)" '
+      +'<span>SHOWROOM</span>'
+      +'<span style="font-weight:400;text-transform:none;font-size:10px;opacity:.8">% pago de:</span>'
+      +'<input type="number" step="0.1" min="1" max="300" value="'+(limMin*100).toFixed(1)+'" onchange="setAv2LimMin(this.value)" '
+        +'style="width:64px;border:1px solid #555;border-radius:3px;padding:2px 6px;font-size:11px;font-weight:700;text-align:center;background:#2a2a2a;color:#fff">'
+      +'<span style="font-weight:400;text-transform:none;font-size:10px;opacity:.8">% até:</span>'
+      +'<input type="number" step="0.1" min="1" max="300" value="'+(limMax*100).toFixed(1)+'" onchange="setAv2LimMax(this.value)" '
         +'style="width:64px;border:1px solid #555;border-radius:3px;padding:2px 6px;font-size:11px;font-weight:700;text-align:center;background:#2a2a2a;color:#fff">'
       +'<span style="font-weight:400;text-transform:none;font-size:10px;opacity:.8">%</span>'
-      +'<span style="font-weight:400;text-transform:none;font-size:10px;opacity:.6;margin-left:auto">clique numa praça para ver as placas acima do corte</span>'
+      +'<span style="font-weight:400;text-transform:none;font-size:10px;opacity:.6;margin-left:auto">clique numa praça para ver as placas dentro da faixa</span>'
     +'</div>'
     +'<div class="tbl-wrap"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr>'
       +'<th style="'+TH+';text-align:left">Praça</th>'
       +'<th style="'+TH+';text-align:right">Avaliações</th>'
-      +'<th style="'+TH+';text-align:right">Qtd %Pago &gt; '+limLabel+'</th>'
-      +'<th style="'+TH+';text-align:right">% &gt; '+limLabel+'</th>'
+      +'<th style="'+TH+';text-align:right">Qtd na Faixa ('+faixaLabel+')</th>'
+      +'<th style="'+TH+';text-align:right">% na Faixa</th>'
       +'<th style="'+TH+';text-align:right">%Pago Médio</th>'
       +'<th style="'+TH+';text-align:right">Valor Avaliado (R$)</th>'
       +'<th style="'+TH+';text-align:right">Ticket Médio (R$)</th>'
