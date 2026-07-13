@@ -6,6 +6,10 @@
 <title>Via1seminovos - Performance</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%23111'/%3E%3Ctext x='16' y='22' font-family='Arial' font-size='14' font-weight='bold' fill='%23fff' text-anchor='middle'%3EV1%3C/text%3E%3C/svg%3E">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- xlsx-js-style: mesmo XLSX, com suporte a estilos de célula (cor de fundo, negrito, cor de fonte). Sobrepõe o global XLSX acima. -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+<!-- fflate: usado só para injetar o congelamento da 1ª coluna no .xlsx gerado -->
+<script src="https://cdn.jsdelivr.net/npm/fflate@0.8.2/umd/index.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -6991,24 +6995,25 @@ function toggleAv2DupPanel(){
   if(window._av2DupOpen && p){ p.scrollIntoView({behavior:'smooth',block:'nearest'}); }
 }
 function _av2DupPanel(groups){
+  if(!window._av2DupOpen) return '';   // fechado: nada aqui — o card lá em cima é o controle
   const nPlacas=groups.length;
   const nAntes=groups.reduce((s,g)=>s+g.n,0);
   const nRem=nAntes-nPlacas;
-  const wrap='border:1px solid var(--border);border-radius:3px;overflow:hidden';
-  const head='background:#1e1e1e;color:#fff;padding:8px 14px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;cursor:pointer';
-  const seta=window._av2DupOpen?'▾':'▸';
+  const wrap='border:1px solid var(--border);border-radius:3px;overflow:hidden;margin-top:2px';
+  const head='background:#f0f0ee;color:#333;padding:8px 14px;font-size:11px;font-weight:700;display:flex;align-items:center;gap:12px;flex-wrap:wrap;border-bottom:1px solid var(--border)';
   let h='<div style="'+wrap+'">'
-    +'<div style="'+head+'" onclick="toggleAv2DupPanel()">'
-      +'<span>'+seta+' Placas Duplicadas — antes × depois</span>'
-      +'<span style="font-weight:400;text-transform:none;font-size:10px;opacity:.85">'
+    +'<div style="'+head+'">'
+      +'<span style="text-transform:uppercase;letter-spacing:.4px">Detalhe · Placas Duplicadas — antes × depois</span>'
+      +'<span style="font-weight:400;font-size:10px;color:var(--muted)">'
         +_av2N(nPlacas)+' placa(s) · '+_av2N(nAntes)+' linhas antes → '+_av2N(nPlacas)+' depois · '+_av2N(nRem)+' removida(s)'
       +'</span>';
   if(nPlacas>0){
-    h+='<button onclick="event.stopPropagation();exportAv2Dup()" style="margin-left:auto;background:#1a7a4c;border:none;color:#fff;border-radius:3px;padding:4px 12px;font-size:10px;font-weight:700;cursor:pointer;text-transform:none">⬇ Excel</button>';
+    h+='<button onclick="exportAv2Dup()" style="margin-left:auto;background:#1a7a4c;border:none;color:#fff;border-radius:3px;padding:4px 12px;font-size:10px;font-weight:700;cursor:pointer">⬇ Excel</button>';
+    h+='<button onclick="toggleAv2DupPanel()" style="background:#fff;border:1px solid var(--border2);border-radius:3px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer">Fechar ✕</button>';
+  } else {
+    h+='<button onclick="toggleAv2DupPanel()" style="margin-left:auto;background:#fff;border:1px solid var(--border2);border-radius:3px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer">Fechar ✕</button>';
   }
   h+='</div>';
-  if(!window._av2DupOpen){ h+='</div>'; return h; }
-
   if(!nPlacas){
     h+='<div style="padding:14px;color:var(--muted);font-size:12px">Nenhuma placa duplicada na base filtrada. Cada placa aparece uma única vez.</div></div>';
     return h;
@@ -7319,7 +7324,8 @@ function _av2PracaTable(rowsFiltrados){
       +'<input type="number" step="0.1" min="1" max="300" value="'+(limMax*100).toFixed(1)+'" onchange="setAv2LimMax(this.value)" '
         +'style="width:64px;border:1px solid #555;border-radius:3px;padding:2px 6px;font-size:11px;font-weight:700;text-align:center;background:#2a2a2a;color:#fff">'
       +'<span style="font-weight:400;text-transform:none;font-size:10px;opacity:.8">%</span>'
-      +'<span style="font-weight:400;text-transform:none;font-size:10px;opacity:.6;margin-left:auto">clique numa praça para ver as placas dentro da faixa</span>'
+      +'<button onclick="exportAv2Faixa()" style="margin-left:auto;background:#1a7a4c;border:none;color:#fff;border-radius:3px;padding:4px 12px;font-size:10px;font-weight:700;cursor:pointer;text-transform:none">⬇ Excel (abas por praça)</button>'
+      +'<span style="font-weight:400;text-transform:none;font-size:10px;opacity:.6">clique numa praça para ver as placas dentro da faixa</span>'
     +'</div>'
     +'<div class="tbl-wrap"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr>'
       +'<th style="'+TH+';text-align:left">Praça</th>'
@@ -7481,7 +7487,8 @@ function _av2AuditTable(rowsFiltrados){
     +'<div style="background:#5a1a1a;color:#fff;padding:8px 14px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
       +'<span>Auditoria Classificação × KM — SHOWROOM</span>'
       +'<span style="font-weight:400;text-transform:none;font-size:10px;opacity:.85">A ≤ 20.000 km · B 20.001–40.000 · C 40.001–60.000</span>'
-      +'<span style="font-weight:400;text-transform:none;font-size:10px;opacity:.6;margin-left:auto">clique numa praça para ver as placas com erro</span>'
+      +'<button onclick="exportAv2Audit()" style="margin-left:auto;background:#1a7a4c;border:none;color:#fff;border-radius:3px;padding:4px 12px;font-size:10px;font-weight:700;cursor:pointer;text-transform:none">⬇ Excel (abas por praça)</button>'
+      +'<span style="font-weight:400;text-transform:none;font-size:10px;opacity:.6">clique numa praça para ver as placas com erro</span>'
     +'</div>'
     +'<div class="tbl-wrap"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr>'
       +'<th style="'+TH+';text-align:left">Praça</th>'
@@ -7549,6 +7556,111 @@ function _av2AuditDrillHtml(nome){
   return h;
 }
 
+// ── Export XLSX das tabelas de auditoria — uma ABA por praça (estado) ──
+function _av2ColLetter(i){ let s=''; i++; while(i){ i--; s=String.fromCharCode(65+(i%26))+s; i=Math.floor(i/26);} return s; }
+function _av2XlsSheetName(e){
+  let n=String(e==null?'':e).replace(/[\\\/\?\*\[\]:]/g,' ').trim();
+  if(!n) n='(sem)';
+  return n.substring(0,31);
+}
+// monta worksheet a partir de headers + linhas; fmt = {indiceColuna:'formatoNumero'}
+// monta worksheet estilizado. opts: { fmt:{colIdx:numFmt}, colStyle:{colIdx:styleObj} }
+// Regras fixas: LINHA 1 (cabeçalho) = célula preta, fonte branca negrito. Coluna A fica normal (mas congelada no download).
+function _av2MakeSheet(headers, dataRows, opts){
+  opts=opts||{};
+  const fmt=opts.fmt||{}, colStyle=opts.colStyle||{};
+  const aoa=[headers].concat(dataRows);
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  const nCols=headers.length, nRows=aoa.length;
+  const S_HDR={fill:{patternType:'solid',fgColor:{rgb:'000000'}},font:{color:{rgb:'FFFFFF'},bold:true},alignment:{horizontal:'center',vertical:'center'}};
+  // cabeçalho (linha 1): célula preta, fonte branca negrito
+  for(let c=0;c<nCols;c++){ const ref=_av2ColLetter(c)+'1'; if(ws[ref]) ws[ref].s=Object.assign({},S_HDR); }
+  // dados
+  for(let r=1;r<nRows;r++){
+    for(let c=0;c<nCols;c++){
+      const ref=_av2ColLetter(c)+(r+1); if(!ws[ref]) continue;
+      const st=colStyle[c]?Object.assign({},colStyle[c]):null; const nf=fmt[c];
+      if(st||nf){ const s=st||{}; if(nf){ s.numFmt=nf; ws[ref].z=nf; if(typeof ws[ref].v==='number') ws[ref].t='n'; } ws[ref].s=s; }
+    }
+  }
+  ws['!cols']=headers.map((h,i)=>({wch: Math.max(11, String(h).length+2, (fmt[i]||colStyle[i])?14:12)}));
+  return ws;
+}
+// ordena estados: PE, BA, CE, PB e depois o resto (alfabético)
+function _av2OrdenaEstados(estados){
+  const ordem=['PE','BA','CE','PB'];
+  return estados.slice().sort((a,b)=>{
+    let ia=ordem.indexOf(a), ib=ordem.indexOf(b);
+    ia=ia<0?99:ia; ib=ib<0?99:ib;
+    return (ia-ib) || String(a).localeCompare(String(b));
+  });
+}
+// gera o .xlsx e injeta o congelamento da 1ª coluna (via fflate); se fflate faltar, baixa sem congelar
+function _av2DownloadXlsxFreezeA(wb, filename){
+  try{
+    if(typeof fflate==='undefined' || !fflate.unzipSync){ XLSX.writeFile(wb, filename); return; }
+    const arr=XLSX.write(wb,{type:'array',bookType:'xlsx'});
+    const files=fflate.unzipSync(new Uint8Array(arr));
+    const dec=new TextDecoder(), enc=new TextEncoder();
+    const pane='<pane xSplit="1" topLeftCell="B1" activePane="topRight" state="frozen"/><selection pane="topRight" activeCell="B1" sqref="B1"/>';
+    Object.keys(files).forEach(name=>{
+      if(/^xl\/worksheets\/sheet\d+\.xml$/.test(name)){
+        let xml=dec.decode(files[name]);
+        if(/<sheetView\b[^>]*\/>/.test(xml)) xml=xml.replace(/<sheetView\b([^>]*?)\/>/, '<sheetView$1>'+pane+'</sheetView>');
+        else xml=xml.replace(/(<sheetView\b[^>]*>)/, '$1'+pane);
+        files[name]=enc.encode(xml);
+      }
+    });
+    const out=fflate.zipSync(files);
+    const blob=new Blob([out],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a'); a.href=url; a.download=filename;
+    document.body.appendChild(a); a.click();
+    setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(url); },100);
+  }catch(e){
+    console.error('Falha ao congelar/baixar, tentando fallback:',e);
+    try{ XLSX.writeFile(wb, filename); }catch(_){ alert('Falha ao gerar Excel: '+e.message); }
+  }
+}
+// SHOWROOM — placas dentro da faixa de % pago, uma aba por praça
+function exportAv2Faixa(){
+  if(typeof XLSX==='undefined'){ alert('Componente de Excel não carregado. Recarregue a página.'); return; }
+  const drill=window._av2PracaDrill||{};
+  const estados=Object.keys(drill);
+  if(!estados.length){ alert('Sem placas para exportar. Abra a aba Avaliações e verifique os filtros.'); return; }
+  const wb=XLSX.utils.book_new();
+  const headers=['Placa','Modelo','% Pago','Valor Aval.','FIPE','KM','Finalidade','Classificação','Loja','OBS'];
+  const fmt={2:'0.0%',3:'"R$" #,##0',4:'"R$" #,##0',5:'#,##0'};
+  const colStyle={2:{font:{color:{rgb:'C00000'},bold:true},alignment:{horizontal:'right'}}}; // % Pago vermelho negrito
+  _av2OrdenaEstados(estados).forEach(e=>{
+    const list=(drill[e]||[]).slice().sort((a,b)=>(b.pct||0)-(a.pct||0));
+    const rows=list.map(r=>[r.placa||'—', r.modelo||'—', (r.pct||0), r.valorAval||0, r.fipe||0, r.km||0, r.finalidade||'—', r.classif||'—', r.loja||'—', '']);
+    XLSX.utils.book_append_sheet(wb, _av2MakeSheet(headers, rows, {fmt:fmt, colStyle:colStyle}), _av2XlsSheetName(e));
+  });
+  const faixa=Math.round(_av2LimMin*100)+'-'+Math.round(_av2LimMax*100);
+  _av2DownloadXlsxFreezeA(wb, 'auditoria_faixa_pago_'+faixa+'pct_'+(_av2Sheet||'aba').replace(/[^a-zA-Z0-9]/g,'_')+'.xlsx');
+}
+// Auditoria Classificação × KM — placas com erro, uma aba por praça
+function exportAv2Audit(){
+  if(typeof XLSX==='undefined'){ alert('Componente de Excel não carregado. Recarregue a página.'); return; }
+  const drill=window._av2AuditDrill||{};
+  const estados=Object.keys(drill);
+  if(!estados.length){ alert('Nenhum erro de Classificação × KM para exportar na base filtrada.'); return; }
+  const wb=XLSX.utils.book_new();
+  const headers=['Placa','Modelo','Classif. Informada','KM','Faixa Esperada (p/ KM)','% Pago','Valor Aval.','Avaliador','Loja','OBS'];
+  const fmt={3:'#,##0',5:'0.0%',6:'"R$" #,##0'};
+  const colStyle={
+    2:{font:{color:{rgb:'C00000'},bold:true},alignment:{horizontal:'center'}}, // Classif. Informada vermelho negrito
+    4:{font:{color:{rgb:'1A7A4C'},bold:true},alignment:{horizontal:'center'}}  // Faixa Esperada verde negrito
+  };
+  _av2OrdenaEstados(estados).forEach(e=>{
+    const list=(drill[e]||[]).slice().sort((a,b)=>(b.km||0)-(a.km||0));
+    const rows=list.map(r=>[r.placa||'—', r.modelo||'—', r.classif||'—', r.km||0, r.faixaEsperada||'—', (r.pct||0), r.valorAval||0, r.avaliador||'—', r.loja||'—', '']);
+    XLSX.utils.book_append_sheet(wb, _av2MakeSheet(headers, rows, {fmt:fmt, colStyle:colStyle}), _av2XlsSheetName(e));
+  });
+  _av2DownloadXlsxFreezeA(wb, 'auditoria_classif_km_'+(_av2Sheet||'aba').replace(/[^a-zA-Z0-9]/g,'_')+'.xlsx');
+}
+
 
 function renderAval2Content(){
   const rowsAll=_av2Filtered();                       // tudo (para contar as < R$ 1 mil)
@@ -7590,7 +7702,7 @@ function renderAval2Content(){
     kCard('% Pago',pctPago>0?_av2Pct1(pctPago):'—','#c62828','Média de Valor Avaliado (U) ÷ FIPE (AE), avaliações ≥ R$ 1 mil com FIPE')+
     kCard('Ticket Médio',ticket>0?_av2RS(ticket):'—','#1a7a4c','Média do Valor Avaliado (≥ R$ 1 mil)')+
     kCard('Abaixo de R$ 1 mil',_av2N(abaixo1k),'#777','Avaliações com Valor Avaliado (U) < R$ 1.000 — contadas SÓ aqui; não entram no Total nem em nenhum outro cálculo')+
-    '<div onclick="toggleAv2DupPanel()" style="cursor:pointer;background:#fff;border:1px solid var(--border);border-left:3px solid #b8860b;border-radius:3px;padding:.6rem 1.1rem;min-width:125px" title="Placas que aparecem mais de uma vez na base filtrada. A dedup mantém a de maior Data de Criação e descarta as demais. Clique para ver o detalhe antes × depois."><p style="font-size:10px;color:var(--muted);margin:0 0 2px;text-transform:uppercase;letter-spacing:.5px;font-weight:600">Placas Duplicadas</p><p style="font-size:19px;font-weight:700;margin:0">'+_av2N(dupPlacas)+' <span style="font-size:10px;font-weight:600;color:#b8860b">▾ detalhe</span></p><p style="font-size:9px;color:var(--muted);margin:2px 0 0">−'+_av2N(dupRemovidas)+' linha(s) na dedup</p></div>'+
+    '<div onclick="toggleAv2DupPanel()" style="cursor:pointer;background:#fff;border:1px solid var(--border);border-left:3px solid #b8860b;border-radius:3px;padding:.6rem 1.1rem;min-width:125px" title="Placas que aparecem mais de uma vez na base filtrada. A dedup mantém a de maior Data de Criação e descarta as demais. Clique para ver o detalhe antes × depois."><p style="font-size:10px;color:var(--muted);margin:0 0 2px;text-transform:uppercase;letter-spacing:.5px;font-weight:600">Placas Duplicadas</p><p style="font-size:19px;font-weight:700;margin:0">'+_av2N(dupPlacas)+' <span style="font-size:10px;font-weight:600;color:#b8860b">'+(window._av2DupOpen?'▴ fechar':'▾ detalhe')+'</span></p><p style="font-size:9px;color:var(--muted);margin:2px 0 0">−'+_av2N(dupRemovidas)+' linha(s) na dedup</p></div>'+
     kCard('SHOWROOM',_av2N(showroom)+' ('+_av2Pct(showroom,total)+'%)','#6a1a7a')+
     kCard('REPASSE',_av2N(repasse)+' ('+_av2Pct(repasse,total)+'%)','#c8921a')+
     kCard('Avaliadores',_av2N(avaliadores),'#1a6a7a')+
