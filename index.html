@@ -3179,6 +3179,44 @@ function renderTempoEstoque(rows,name){
   buildTempoEstTab('pepb',pepb,name,window._tempoEstLoja&&window._tempoEstLoja.pepb||'');
 }
 
+// ── Cobertura de Estoque: meta mensal ÷ dias úteis = venda/dia; estoque ÷ venda/dia = dias de venda ──
+// meta é salva por mês+região (a Sophi digita conforme o filtro); dias úteis por mês (vale para todas as regiões)
+function setTempoEstCob(regId,tipo,valor){
+  const name=window._tempoEstName||'';
+  const n=parseFloat(String(valor).replace(',','.'));
+  if(tipo==='meta') _lsSet('tempoEstMeta_'+name+'_'+regId, (!isNaN(n)&&n>0)?String(n):'');
+  else              _lsSet('tempoEstDU_'+name,             (!isNaN(n)&&n>0)?String(n):'');
+  renderTempoEstoque(window._tempoEstoqueRows||[], name);
+}
+function _tempoEstCobCard(regId,name,estoque){
+  const meta=parseFloat(_ls('tempoEstMeta_'+name+'_'+regId,''))||0;
+  const du=parseFloat(_ls('tempoEstDU_'+name,''))||0;
+  const f1=v=>(v||0).toLocaleString('pt-BR',{maximumFractionDigits:1});
+  const inp=(v,tipo,ph)=>'<input type="number" step="1" min="1" value="'+(v>0?v:'')+'" placeholder="'+ph+'" '
+    +'onchange="setTempoEstCob(\''+regId+'\',\''+tipo+'\',this.value)" onclick="event.stopPropagation()" '
+    +'style="width:56px;border:1px solid var(--border2);border-radius:3px;padding:2px 5px;font-size:11px;font-weight:700;text-align:center;background:#fff">';
+  let corpo, bg='#eef4fd';
+  if(meta>0 && du>0){
+    const vendaDia=meta/du;
+    const cobertura=vendaDia>0?(estoque/vendaDia):0;
+    const ok=cobertura>=du;
+    bg=ok?'#e8f5ee':'#fce8e8';
+    const cor=ok?'var(--green)':'var(--red)';
+    const detalhe=ok
+      ? 'cobre o mês · sobram '+f1(cobertura-du)+'d'
+      : 'faltam ~'+Math.max(0,Math.ceil(meta-estoque)).toLocaleString('pt-BR')+' un. p/ cobrir o mês';
+    corpo='<p style="font-size:20px;font-weight:700;margin:0;color:'+cor+'">'+f1(cobertura)+' dias de venda</p>'
+      +'<p style="font-size:10px;color:var(--muted);margin:2px 0 0">'+f1(vendaDia)+'/dia p/ bater a meta · '+detalhe+'</p>';
+  } else {
+    corpo='<p style="font-size:12px;color:var(--muted);margin:6px 0 0">Informe a meta e os dias úteis</p>';
+  }
+  return '<div style="flex:1;min-width:230px;background:'+bg+';border:1px solid var(--border);border-radius:3px;padding:.7rem 1.2rem">'
+    +'<p style="font-size:10px;color:var(--muted);margin:0 0 4px;text-transform:uppercase;letter-spacing:.5px;font-weight:600">Volumetria de Estoque</p>'
+    +'<p style="font-size:10px;color:var(--muted);margin:0 0 4px">meta '+inp(meta,'meta','450')+' · dias úteis '+inp(du,'du','27')+'</p>'
+    +corpo
+  +'</div>';
+}
+
 function showTempoEstTab(id){
   ['geral','bace','pepb'].forEach(t=>{
     const el=document.getElementById('tempo-est-tab-'+t); if(el) el.style.display=(t===id)?'block':'none';
@@ -3385,8 +3423,9 @@ function buildTempoEstTab(regId, regionRows, name, lojaFilter){
   +'<div style="display:flex;gap:12px;margin-bottom:18px;flex-wrap:wrap">'
     +kpi('Unidades em Estoque',totalQtd.toLocaleString('pt-BR'))
     +kpi('Média Global',fmtN(globalMedia)+' dias','#eef4fd','var(--blue)')
-    +kpi('Giro Rápido (&lt;30d) <span style="color:#1a7a4c;font-weight:700">Poucos dias</span>',rapidos+' modelos','#e8f5ee','var(--green)')
-    +kpi('Parado (≥60d) <span style="color:#c62828;font-weight:700">Mais dias</span>',lentos+' modelos','#fce8e8','var(--red)')
+    +_tempoEstCobCard(regId,name,totalQtd)
+    +kpi('<span style="color:#1a7a4c;font-weight:700">Poucos dias</span> (&lt;30d)',rapidos+' modelos','#e8f5ee','var(--green)')
+    +kpi('<span style="color:#c62828;font-weight:700">Mais dias</span> (≥60d)',lentos+' modelos','#fce8e8','var(--red)')
     +kpi('Mais Novo',maisNovo,'#fff','var(--green)')
     +kpi('Mais Antigo',maisVelho,'#fff','var(--red)')
   +'</div>'
