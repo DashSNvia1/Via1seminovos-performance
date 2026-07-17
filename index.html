@@ -7275,7 +7275,7 @@ function _av2GroupBy(rows,key){
   return Object.values(m).sort((a,b)=>b.qtde-a.qtde);
 }
 
-// ── Tabela por Praça (Estado) — só SHOWROOM ──
+// ── Tabela por Praça (Estado) — SHOWROOM + REPASSE ──
 let _av2LimMin = 0.75; // faixa de % pago — mínimo (editável no painel; padrão 75,0%)
 let _av2LimMax = 0.81; // faixa de % pago — máximo (editável no painel; padrão 81,0%)
 function setAv2LimMin(v){
@@ -7290,7 +7290,7 @@ function setAv2LimMax(v){
 }
 
 function _av2PracaTable(rowsFiltrados){
-  const rows = rowsFiltrados.filter(r=>r.finalidade==='SHOWROOM');
+  const rows = rowsFiltrados.filter(r=>{ const f=String(r.finalidade||''); return f.includes('SHOWROOM')||f.includes('REPASSE'); });
   if(!rows.length) return '';
   const limMin=_av2LimMin, limMax=_av2LimMax;
   const porEstado={};
@@ -7357,7 +7357,7 @@ function _av2PracaTable(rowsFiltrados){
   };
   let h='<div style="border:1px solid var(--border);border-radius:3px;overflow:hidden">'
     +'<div style="background:#1e1e1e;color:#fff;padding:8px 14px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
-      +'<span>SHOWROOM</span>'
+      +'<span>SHOWROOM + REPASSE</span>'
       +'<span style="font-weight:400;text-transform:none;font-size:10px;opacity:.8">% pago de:</span>'
       +'<input type="number" step="0.1" min="1" max="300" value="'+(limMin*100).toFixed(1)+'" onchange="setAv2LimMin(this.value)" '
         +'style="width:64px;border:1px solid #555;border-radius:3px;padding:2px 6px;font-size:11px;font-weight:700;text-align:center;background:#2a2a2a;color:#fff">'
@@ -7380,7 +7380,7 @@ function _av2PracaTable(rowsFiltrados){
     +arr.map(([e,P])=>fila(e,P,false,true)).join('')
     +fila('TOTAL ('+arr.length+' praças)',T,true,false)
     +'</tbody></table></div>'
-    +'<div style="font-size:10px;color:var(--muted);padding:6px 12px">Somente finalidade SHOWROOM · Valores, Ticket e % Pago consideram apenas avaliações entre R$ 1 mil e R$ 2 milhões (com FIPE para o % Pago); valores fora dessa faixa são tratados como erro de dado.</div>'
+    +'<div style="font-size:10px;color:var(--muted);padding:6px 12px">Finalidades SHOWROOM e REPASSE · Valores, Ticket e % Pago consideram apenas avaliações entre R$ 1 mil e R$ 2 milhões (com FIPE para o % Pago); valores fora dessa faixa são tratados como erro de dado.</div>'
     +'</div>';
   return h;
 }
@@ -7456,7 +7456,7 @@ function _av2DrillHtml(nome){
 
 // ── Auditoria Classificação A/B/C × KM ──
 // Regra: A até 20.000 | B 20.001–40.000 | C 40.001–60.000. Erro = classif não bate com a faixa de KM.
-// D e E ficam de fora. Considera só SHOWROOM (mesma base da tabela Por Praça) e valores válidos.
+// D e E ficam de fora. Considera SHOWROOM + REPASSE (mesma base da tabela Por Praça) e valores válidos.
 function _av2FaixaKm(km){
   if(km<=20000) return 'A';
   if(km<=40000) return 'B';
@@ -7465,7 +7465,7 @@ function _av2FaixaKm(km){
 }
 function _av2AuditTable(rowsFiltrados){
   const rows=rowsFiltrados.filter(r=>{
-    if(r.finalidade!=='SHOWROOM') return false;
+    const f=String(r.finalidade||''); if(!(f.includes('SHOWROOM')||f.includes('REPASSE'))) return false;
     const cl=String(r.classif||'').trim().toUpperCase();
     return cl==='A'||cl==='B'||cl==='C';   // só audita A/B/C
   });
@@ -7526,7 +7526,7 @@ function _av2AuditTable(rowsFiltrados){
   };
   let h='<div style="border:1px solid var(--border);border-radius:3px;overflow:hidden">'
     +'<div style="background:#5a1a1a;color:#fff;padding:8px 14px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
-      +'<span>Auditoria Classificação × KM — SHOWROOM</span>'
+      +'<span>Auditoria Classificação × KM — SHOWROOM + REPASSE</span>'
       +'<span style="font-weight:400;text-transform:none;font-size:10px;opacity:.85">A ≤ 20.000 km · B 20.001–40.000 · C 40.001–60.000</span>'
       +'<button onclick="exportAv2Audit()" style="margin-left:auto;background:#1a7a4c;border:none;color:#fff;border-radius:3px;padding:4px 12px;font-size:10px;font-weight:700;cursor:pointer;text-transform:none">⬇ Excel (abas por praça)</button>'
       +'<span style="font-weight:400;text-transform:none;font-size:10px;opacity:.6">clique numa praça para ver as placas com erro</span>'
@@ -7543,7 +7543,7 @@ function _av2AuditTable(rowsFiltrados){
     +arr.map(([e,P])=>fila(e,P,false)).join('')
     +fila('TOTAL ('+arr.length+' praças)',T,true)
     +'</tbody></table></div>'
-    +'<div style="font-size:10px;color:var(--muted);padding:6px 12px">Considera apenas SHOWROOM com classificação A, B ou C. <b>Erro</b> = a faixa de KM do veículo não corresponde à classificação informada (ou KM acima de 60.000, sem faixa). D e E ficam fora.</div>'
+    +'<div style="font-size:10px;color:var(--muted);padding:6px 12px">Considera SHOWROOM e REPASSE com classificação A, B ou C. <b>Erro</b> = a faixa de KM do veículo não corresponde à classificação informada (ou KM acima de 60.000, sem faixa). D e E ficam fora.</div>'
     +'</div>';
   return h;
 }
@@ -7663,7 +7663,7 @@ function _av2DownloadXlsxFreezeA(wb, filename){
     try{ XLSX.writeFile(wb, filename); }catch(_){ alert('Falha ao gerar Excel: '+e.message); }
   }
 }
-// SHOWROOM — placas dentro da faixa de % pago, uma aba por praça
+// SHOWROOM + REPASSE — placas dentro da faixa de % pago, uma aba por praça
 function exportAv2Faixa(){
   if(typeof XLSX==='undefined'){ alert('Componente de Excel não carregado. Recarregue a página.'); return; }
   const drill=window._av2PracaDrill||{};
