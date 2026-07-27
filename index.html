@@ -2429,6 +2429,10 @@ function computeAval(rows,name) {
   console.log('KA:', KA, '| KM:', KM);
   if(!KE||!KA){console.warn('Colunas não encontradas. Keys:',keys.slice(0,10));return null;}
 
+  // coluna de placa (se existir na base) — usada pelo export de excedentes por equipe
+  const KP = keys.find(k=>k.trim().toUpperCase()==='PLACA') || keys.find(k=>k.toUpperCase().includes('PLACA')) || null;
+  window._avalRaw = {rows, KE, KA, KM, KP, name};
+
   const empMap={};
   let allAv=[],allMe=[];
   rows.forEach(r=>{
@@ -2854,6 +2858,58 @@ function sortAvalTable(col) {
   if(el && window._avalData) el.innerHTML = renderAvalTable(window._avalData.empresas);
 }
 
+// ── Export Excel: avaliações que ULTRAPASSARAM as metas de tempo (Avaliação > 30min OU Mesa > 10min) ──
+// Uma aba por equipe (COLAB_MAP). Todas as linhas em vermelho negrito (são todas violações).
+function _avalMakeSheetRed(headers, dataRows, redCols){
+  const red=new Set(redCols||[]);
+  const aoa=[headers].concat(dataRows);
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  const S_HDR={fill:{patternType:'solid',fgColor:{rgb:'000000'}},font:{color:{rgb:'FFFFFF'},bold:true},alignment:{horizontal:'center',vertical:'center'}};
+  const S_RED={font:{color:{rgb:'C00000'},bold:true}};
+  const nCols=headers.length, nRows=aoa.length;
+  for(let c=0;c<nCols;c++){ const ref=_av2ColLetter(c)+'1'; if(ws[ref]) ws[ref].s=Object.assign({},S_HDR); }
+  for(let r=1;r<nRows;r++){ for(let c=0;c<nCols;c++){ if(!red.has(c)) continue; const ref=_av2ColLetter(c)+(r+1); if(ws[ref]) ws[ref].s=Object.assign({},S_RED); } }
+  ws['!cols']=headers.map(h=>({wch: Math.max(12, String(h).length+2)}));
+  return ws;
+}
+function exportAvalExcedentes(){
+  if(typeof XLSX==='undefined'){ alert('Componente de Excel não carregado. Recarregue a página.'); return; }
+  const raw=window._avalRaw;
+  if(!raw||!raw.rows||!raw.rows.length){ alert('Carregue um mês na aba Tempo de Avaliação antes de exportar.'); return; }
+  const rows=raw.rows, KE=raw.KE, KA=raw.KA, KM=raw.KM, KP=raw.KP, name=raw.name;
+  const AVAL_MAX=1800, MESA_MAX=600; // 30min e 10min em segundos
+  const norm=s=>String(s||'').trim().toUpperCase().replace(/\s+/g,' ');
+  // mapa empresa -> equipe
+  const emp2eq={};
+  Object.keys(COLAB_MAP).forEach(eq=>COLAB_MAP[eq].forEach(l=>{ emp2eq[norm(l)]=eq; }));
+  const SEM='Sem equipe';
+  const byEq={}; Object.keys(COLAB_MAP).forEach(eq=>byEq[eq]=[]); byEq[SEM]=[];
+  rows.forEach(r=>{
+    const emp=String(r[KE]||'').trim(); if(!emp||emp==='Empresa') return;
+    const av=timeToSec(r[KA]); const me=KM?timeToSec(r[KM]):null;
+    const exAv=(av!==null && av>AVAL_MAX);
+    const exMe=(me!==null && me>MESA_MAX);
+    if(!exAv && !exMe) return;                 // só excedentes
+    const eq=emp2eq[norm(emp)]||SEM;
+    if(!byEq[eq]) byEq[eq]=[];
+    const motivo=(exAv&&exMe)?'Avaliação + Mesa':(exAv?'Avaliação (>30min)':'Mesa (>10min)');
+    byEq[eq].push({placa:KP?String(r[KP]||'').trim():'', empresa:emp, av, me, motivo});
+  });
+  const wb=XLSX.utils.book_new();
+  const headers=['Placa','Empresa','Tempo Avaliação','Tempo Mesa','Total (Av+Mesa)','Motivo'];
+  let total=0;
+  Object.keys(COLAB_MAP).concat([SEM]).forEach(eq=>{
+    const list=(byEq[eq]||[]).slice().sort((a,b)=>((b.av||0)+(b.me||0))-((a.av||0)+(a.me||0)));
+    if(!list.length) return;                   // não cria aba vazia
+    total+=list.length;
+    const dataRows=list.map(x=>[x.placa||'—', x.empresa, secToStr(x.av), (x.me!==null?secToStr(x.me):'—'), secToStr((x.av||0)+(x.me||0)), '']);
+    XLSX.utils.book_append_sheet(wb, _avalMakeSheetRed(headers, dataRows, [2,3,4]), _av2XlsSheetName(eq));
+  });
+  if(!total){ alert('Nenhuma avaliação ultrapassou as metas (Avaliação > 30min ou Mesa > 10min) neste mês.'); return; }
+  if(!KP){ alert('Aviso: a base de Tempo de Avaliação não tem coluna de PLACA, então a coluna Placa sai vazia. O restante (empresa, tempos, motivo) está completo.'); }
+  _av2DownloadXlsxFreezeA(wb, 'excedentes_tempo_'+String(name||'mes').replace(/[^a-zA-Z0-9]/g,'_')+'.xlsx');
+}
+
 function renderAval(d) {
   window._avalData = d;
   const b=document.getElementById('avalBody');
@@ -2861,6 +2917,9 @@ function renderAval(d) {
   const k=d.kpi;
   b.innerHTML=`
   <div class="aval-header"><h2> Dashboard de Avaliações — ${d.name}</h2><p>Análise de Tempo de Avaliação e Performance por Empresa</p></div>
+  <div style="padding:12px 20px 0;display:flex;justify-content:flex-end">
+    <button onclick="exportAvalExcedentes()" title="Exporta só as avaliações que ultrapassaram as metas (Avaliação > 30min ou Mesa > 10min), uma aba por equipe, em vermelho negrito." style="background:#c0392b;color:#fff;border:none;border-radius:3px;padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer">⬇ Excel — Excedentes de tempo (por equipe)</button>
+  </div>
   <div style="padding:14px 20px 0">
   ${kpiStrip2([
     kpiCard(' Total Avaliações',k.tq,'var(--ink)','#f0f8ff'),
