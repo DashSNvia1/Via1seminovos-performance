@@ -7531,6 +7531,7 @@ function _av2AuditTable(rowsFiltrados){
   });
   if(!rows.length) return '';
   const porEstado={};
+  window._av2AuditAval={}; // {estado:{avaliador:{aval,erro}}} para o quadrante do Excel
   rows.forEach(r=>{
     const e=r.estado||'(sem estado)';
     if(!porEstado[e]) porEstado[e]={aval:0,erro:0,somaPct:0,nPct:0,somaVal:0,nVal:0};
@@ -7539,7 +7540,13 @@ function _av2AuditTable(rowsFiltrados){
     const cl=String(r.classif||'').trim().toUpperCase();
     const faixa=_av2FaixaKm(r.km||0);
     // erro: a faixa de KM é diferente da classificação informada
-    if(faixa!==cl) P.erro++;
+    const ehErro=(faixa!==cl);
+    if(ehErro) P.erro++;
+    // tally por avaliador (naquela praça)
+    const avl=(String(r.avaliador||'').trim())||'—';
+    const AA=(window._av2AuditAval[e]=window._av2AuditAval[e]||{});
+    const A=(AA[avl]=AA[avl]||{aval:0,erro:0});
+    A.aval++; if(ehErro) A.erro++;
     if(r.valorAval>=1000 && r.valorAval<=2000000){
       P.somaVal+=r.valorAval; P.nVal++;
       if(r.fipe>0){ const pct=r.valorAval/r.fipe; if(pct<=3){ P.somaPct+=pct; P.nPct++; } }
@@ -7742,6 +7749,53 @@ function exportAv2Faixa(){
   _av2DownloadXlsxFreezeA(wb, 'auditoria_faixa_pago_'+faixa+'pct_'+(_av2Sheet||'aba').replace(/[^a-zA-Z0-9]/g,'_')+'.xlsx');
 }
 // Auditoria Classificação × KM — placas com erro, uma aba por praça
+// insere, à direita dos dados (a partir da coluna startCol), um quadrante:
+// Avaliador · Avaliações · Qtd Erro · % Erro — para o estado informado
+function _av2AddAvaliadorQuadrant(ws, estado, startCol){
+  const src=(window._av2AuditAval&&window._av2AuditAval[estado])||{};
+  const lista=Object.keys(src).map(av=>({av, aval:src[av].aval, erro:src[av].erro}))
+    .filter(x=>x.erro>0)
+    .sort((a,b)=>(b.erro-a.erro) || ((b.erro/b.aval)-(a.erro/a.aval)) || a.av.localeCompare(b.av));
+  const S_HDR={fill:{patternType:'solid',fgColor:{rgb:'000000'}},font:{color:{rgb:'FFFFFF'},bold:true},alignment:{horizontal:'center',vertical:'center'}};
+  const S_TITLE={fill:{patternType:'solid',fgColor:{rgb:'5A1A1A'}},font:{color:{rgb:'FFFFFF'},bold:true},alignment:{horizontal:'center',vertical:'center'}};
+  const S_NAME={font:{bold:true,color:{rgb:'1A2E4E'}},alignment:{horizontal:'left'}};
+  const S_CENTER={alignment:{horizontal:'center'}};
+  const S_ERR={font:{color:{rgb:'C00000'},bold:true},alignment:{horizontal:'center'}};
+  const S_PCT={font:{color:{rgb:'C00000'},bold:true},alignment:{horizontal:'center'},numFmt:'0.0%'};
+  const put=(c,r,v,t,s,z)=>{ const ref=_av2ColLetter(c)+(r+1); const cell={t:t,v:v}; if(s)cell.s=s; if(z){cell.z=z;} ws[ref]=cell; };
+  // título mesclado + cabeçalho
+  put(startCol,0,'ERROS POR AVALIADOR — '+estado,'s',S_TITLE);
+  ws['!merges']=ws['!merges']||[];
+  ws['!merges'].push({s:{r:0,c:startCol},e:{r:0,c:startCol+3}});
+  const heads=['Avaliador','Avaliações','Qtd Erro','% Erro'];
+  heads.forEach((h,i)=>put(startCol+i,1,h,'s',S_HDR));
+  let totAval=0, totErro=0;
+  lista.forEach((x,i)=>{
+    const r=2+i;
+    put(startCol+0,r,x.av,'s',S_NAME);
+    put(startCol+1,r,x.aval,'n',S_CENTER);
+    put(startCol+2,r,x.erro,'n',S_ERR);
+    put(startCol+3,r,(x.aval?x.erro/x.aval:0),'n',S_PCT,'0.0%');
+    totAval+=x.aval; totErro+=x.erro;
+  });
+  // linha total
+  const rt=2+lista.length;
+  put(startCol+0,rt,'TOTAL','s',{font:{bold:true},alignment:{horizontal:'left'}});
+  put(startCol+1,rt,totAval,'n',{font:{bold:true},alignment:{horizontal:'center'}});
+  put(startCol+2,rt,totErro,'n',{font:{bold:true,color:{rgb:'C00000'}},alignment:{horizontal:'center'}});
+  put(startCol+3,rt,(totAval?totErro/totAval:0),'n',{font:{bold:true,color:{rgb:'C00000'}},alignment:{horizontal:'center'},numFmt:'0.0%'},'0.0%');
+  // larguras das colunas do quadrante
+  ws['!cols']=ws['!cols']||[];
+  const widths={[startCol]:30,[startCol+1]:12,[startCol+2]:11,[startCol+3]:10};
+  const maxCol=startCol+3;
+  for(let c=0;c<=maxCol;c++){ if(!ws['!cols'][c]) ws['!cols'][c]={wch:12}; if(widths[c]) ws['!cols'][c]={wch:widths[c]}; }
+  // gap entre os dados e o quadrante
+  if(startCol>0 && !ws['!cols'][startCol-1]) ws['!cols'][startCol-1]={wch:3};
+  // expande o range da planilha para cobrir o quadrante
+  const cur=XLSX.utils.decode_range(ws['!ref']);
+  const maxRow=Math.max(cur.e.r, rt);
+  ws['!ref']=XLSX.utils.encode_range({s:{r:0,c:0},e:{r:maxRow,c:maxCol}});
+}
 function exportAv2Audit(){
   if(typeof XLSX==='undefined'){ alert('Componente de Excel não carregado. Recarregue a página.'); return; }
   const drill=window._av2AuditDrill||{};
@@ -7757,7 +7811,9 @@ function exportAv2Audit(){
   _av2OrdenaEstados(estados).forEach(e=>{
     const list=(drill[e]||[]).slice().sort((a,b)=>(b.km||0)-(a.km||0));
     const rows=list.map(r=>[r.placa||'—', r.modelo||'—', r.classif||'—', r.km||0, r.faixaEsperada||'—', (r.pct||0), r.valorAval||0, r.avaliador||'—', r.loja||'—', '']);
-    XLSX.utils.book_append_sheet(wb, _av2MakeSheet(headers, rows, {fmt:fmt, colStyle:colStyle}), _av2XlsSheetName(e));
+    const ws=_av2MakeSheet(headers, rows, {fmt:fmt, colStyle:colStyle});
+    _av2AddAvaliadorQuadrant(ws, e, 11); // quadrante a partir da coluna L (deixa K de gap)
+    XLSX.utils.book_append_sheet(wb, ws, _av2XlsSheetName(e));
   });
   _av2DownloadXlsxFreezeA(wb, 'auditoria_classif_km_'+(_av2Sheet||'aba').replace(/[^a-zA-Z0-9]/g,'_')+'.xlsx');
 }
