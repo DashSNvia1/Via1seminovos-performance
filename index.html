@@ -7513,20 +7513,21 @@ function _av2DrillHtml(nome){
   return h;
 }
 
-// ── Auditoria Classificação A/B/C × KM ──
-// Regra: A até 20.000 | B 20.001–40.000 | C 40.001–60.000. Erro = classif não bate com a faixa de KM.
-// D e E ficam de fora. Considera SHOWROOM + REPASSE (mesma base da tabela Por Praça) e valores válidos.
+// ── Auditoria Classificação A/B/C/D/E × KM ──
+// Regra: A 0–20.000 | B 20.001–40.000 | C 40.001–60.000 | D 60.001–150.000 | E acima de 150.000.
+// Erro = classif informada não bate com a faixa de KM. Considera SHOWROOM + REPASSE e valores válidos.
 function _av2FaixaKm(km){
   if(km<=20000) return 'A';
   if(km<=40000) return 'B';
   if(km<=60000) return 'C';
-  return null; // acima de 60 mil não tem faixa A/B/C
+  if(km<=150000) return 'D';
+  return 'E'; // acima de 150 mil km
 }
 function _av2AuditTable(rowsFiltrados){
   const rows=rowsFiltrados.filter(r=>{
     const f=String(r.finalidade||''); if(!(f.includes('SHOWROOM')||f.includes('REPASSE'))) return false;
     const cl=String(r.classif||'').trim().toUpperCase();
-    return cl==='A'||cl==='B'||cl==='C';   // só audita A/B/C
+    return cl==='A'||cl==='B'||cl==='C'||cl==='D'||cl==='E';   // audita A a E
   });
   if(!rows.length) return '';
   const porEstado={};
@@ -7537,8 +7538,8 @@ function _av2AuditTable(rowsFiltrados){
     P.aval++;
     const cl=String(r.classif||'').trim().toUpperCase();
     const faixa=_av2FaixaKm(r.km||0);
-    // erro: km não tem faixa (>60k) OU a faixa do km é diferente da classificação informada
-    if(faixa===null || faixa!==cl) P.erro++;
+    // erro: a faixa de KM é diferente da classificação informada
+    if(faixa!==cl) P.erro++;
     if(r.valorAval>=1000 && r.valorAval<=2000000){
       P.somaVal+=r.valorAval; P.nVal++;
       if(r.fipe>0){ const pct=r.valorAval/r.fipe; if(pct<=3){ P.somaPct+=pct; P.nPct++; } }
@@ -7553,11 +7554,11 @@ function _av2AuditTable(rowsFiltrados){
   rows.forEach(r=>{
     const cl=String(r.classif||'').trim().toUpperCase();
     const faixa=_av2FaixaKm(r.km||0);
-    if(!(faixa===null || faixa!==cl)) return; // só erros
+    if(faixa===cl) return; // só erros
     const e=r.estado||'(sem estado)';
     (window._av2AuditDrill[e]=window._av2AuditDrill[e]||[]).push({
       placa:r.placa||'—', modelo:r.modelo||'—', classif:cl,
-      km:r.km||0, faixaEsperada:(faixa||'—(>60k)'), loja:r.loja||'—',
+      km:r.km||0, faixaEsperada:faixa, loja:r.loja||'—',
       avaliador:r.avaliador||'—',
       pct:(r.fipe>0&&(r.valorAval/r.fipe)<=3)?(r.valorAval/r.fipe):0, valorAval:r.valorAval
     });
@@ -7586,7 +7587,7 @@ function _av2AuditTable(rowsFiltrados){
   let h='<div style="border:1px solid var(--border);border-radius:3px;overflow:hidden">'
     +'<div style="background:#5a1a1a;color:#fff;padding:8px 14px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
       +'<span>Auditoria Classificação × KM — SHOWROOM + REPASSE</span>'
-      +'<span style="font-weight:400;text-transform:none;font-size:10px;opacity:.85">A ≤ 20.000 km · B 20.001–40.000 · C 40.001–60.000</span>'
+      +'<span style="font-weight:400;text-transform:none;font-size:10px;opacity:.85">A ≤ 20.000 km · B 20.001–40.000 · C 40.001–60.000 · D 60.001–150.000 · E acima de 150.000</span>'
       +'<button onclick="exportAv2Audit()" style="margin-left:auto;background:#1a7a4c;border:none;color:#fff;border-radius:3px;padding:4px 12px;font-size:10px;font-weight:700;cursor:pointer;text-transform:none">⬇ Excel (abas por praça)</button>'
       +'<span style="font-weight:400;text-transform:none;font-size:10px;opacity:.6">clique numa praça para ver as placas com erro</span>'
     +'</div>'
@@ -7602,7 +7603,7 @@ function _av2AuditTable(rowsFiltrados){
     +arr.map(([e,P])=>fila(e,P,false)).join('')
     +fila('TOTAL ('+arr.length+' praças)',T,true)
     +'</tbody></table></div>'
-    +'<div style="font-size:10px;color:var(--muted);padding:6px 12px">Considera SHOWROOM e REPASSE com classificação A, B ou C. <b>Erro</b> = a faixa de KM do veículo não corresponde à classificação informada (ou KM acima de 60.000, sem faixa). D e E ficam fora.</div>'
+    +'<div style="font-size:10px;color:var(--muted);padding:6px 12px">Considera SHOWROOM e REPASSE com classificação A, B, C, D ou E. <b>Erro</b> = a faixa de KM do veículo não corresponde à classificação informada.</div>'
     +'</div>';
   return h;
 }
