@@ -1078,7 +1078,7 @@ async function loadSheet(name) {
         modelo:String(r['MODELO']||r[' ']||r['']||'').trim(),
         placa:String(r['PLACA']||'').trim(),
         totalRecebido:toNum(r['Total Recebido']),
-        diasEstoque:toNum(r['DiasEstoque']),
+        diasEstoque:_diasEstoque(r),
         km:toNum(r['KM']), ano:r['ANO ']||r['ANO']||'',
         margemRS:toNum(r['Margem R$']),
         finalidade,
@@ -1159,14 +1159,15 @@ function aggregate(rows) {
   const map={};
   rows.forEach(r=>{
     const f=r.familia;
-    if(!map[f]) map[f]={familia:f,vendas:0,ms:0,ps:0,fs:0,ts:0,tn:0,mrs:0,ds:0,n:0};
+    if(!map[f]) map[f]={familia:f,vendas:0,ms:0,ps:0,fs:0,ts:0,tn:0,mrs:0,rec:0,ds:0,n:0};
     map[f].vendas+=r.vendas; map[f].ms+=r.margem; map[f].ps+=r.pago; map[f].fs+=r.fipe; map[f].n++;
     if(r.tkm>0){map[f].ts+=r.tkm; map[f].tn++;}
     map[f].mrs+=r.margemRS||0;
+    map[f].rec+=r.totalRecebido||0;
     map[f].ds+=r.diasEstoque||0;
   });
   return Object.values(map).sort((a,b)=>b.vendas-a.vendas)
-    .map((d,i)=>{const n=d.n||1; return{rank:i+1,familia:d.familia,vendas:d.vendas,tkm:d.tn?d.ts/d.tn:0,margem:d.ms/n,pago:d.ps/n,fipe:d.fs/n,margemRS:d.mrs/n,dias:d.ds/n};});
+    .map((d,i)=>{const n=d.n||1; return{rank:i+1,familia:d.familia,vendas:d.vendas,tkm:d.tn?d.ts/d.tn:0,margem:d.rec?d.mrs/d.rec:0,pago:d.ps/n,fipe:d.fs/n,margemRS:d.mrs/n,dias:d.ds/n};});
 }
 
 // ── Parametrização de nomes de modelo ────────────────────────────────────────
@@ -1223,6 +1224,15 @@ function extractFamily(m) {
   return base;
 }
 function toNum(v){const n=parseFloat(v);return isNaN(n)?0:n;}
+// lê "dias em estoque" de uma linha tolerando variações de nome do cabeçalho
+// (DiasEstoque, "Dias Estoque", "Dias em Estoque", DIAS ESTOQUE, Dias). Evita zerar tudo se o header mudar.
+function _diasEstoque(r){
+  for(const k in r){
+    const s=String(k).trim().toLowerCase().replace(/\s+/g,'');
+    if(s==='diasestoque' || (s.indexOf('dias')>=0 && s.indexOf('estoque')>=0) || s==='dias') return toNum(r[k]);
+  }
+  return toNum(r['DiasEstoque']);
+}
 function pct2(v){return(v*100).toFixed(2)+'%';}
 function pct1(v){return(v*100).toFixed(1)+'%';}
 
@@ -1235,7 +1245,10 @@ function renderKPIs(id) {
   if(!rows.length) return;
   const labels={geral:'Geral',bace:'Bahia e Ceará',pepb:'Pernambuco e Paraíba'};
   const tv=rows.reduce((s,r)=>s+r.vendas,0);
-  const am=rows.reduce((s,r)=>s+r.margem,0)/(rows.length||1);
+  // % Margem ponderada: soma da Margem R$ ÷ soma do Total Recebido (não média simples dos %)
+  const _smrs=rows.reduce((s,r)=>s+(r.margemRS||0),0);
+  const _srec=rows.reduce((s,r)=>s+(r.totalRecebido||0),0);
+  const am=_srec?_smrs/_srec:0;
   const ap=rows.reduce((s,r)=>s+r.pago,0)/(rows.length||1);
   const af=rows.reduce((s,r)=>s+r.fipe,0)/(rows.length||1);
   const bv=new Set(rawRows.bace.map(r=>r.loja)).size;
@@ -1722,7 +1735,7 @@ async function loadAgingSheet(name) {
       ano:      r['ANO ']||r['ANO']||'',
       km:       toNum(r['KM']),
       vendas:   toNum(r['( = ) Total']),
-      diasEstoque: toNum(r['DiasEstoque']),
+      diasEstoque: _diasEstoque(r),
       totalRecebido: toNum(r['Total Recebido']||r['TKM']),
       margemRS: toNum(r['Margem R$']),
       margem:   toNum(r['% Margem']),
@@ -2987,7 +3000,7 @@ async function loadGiroSheet(name) {
       ano:     String(r['ANO ']||r['ANO']||'').trim(),
       km:      toNum(r['KM']),
       vendas:  toNum(r['( = ) Total']),
-      dias:    toNum(r['DiasEstoque']),
+      dias:    _diasEstoque(r),
       margem:  toNum(r['% Margem']),
       margemRS:toNum(r['Margem R$']),
       tkm:     toNum(r['Total Recebido']||r['TKM']),
@@ -3183,7 +3196,14 @@ async function loadTempoEstoqueSheet(name){
     const data=await jsonp(API_ESTOQUE,{sheet:name});
     if(data.error) throw new Error(data.error);
     const headers=data.headers||[];
-    const diasCol=headers[20]||'DiasEstoque';
+    // coluna de dias em estoque: por NOME (tolerante a espaços/caixa), nunca por posição fixa —
+    // índice fixo (headers[20]) zera todos os dias se a ordem das colunas da planilha mudar.
+    const _diasNome=headers.find(h=>{
+      const s=String(h).trim().toLowerCase().replace(/\s+/g,'');
+      return s==='diasestoque' || (s.indexOf('dias')>=0 && s.indexOf('estoque')>=0) || s==='dias';
+    });
+    const diasCol=_diasNome||headers[20]||'DiasEstoque';
+    if(!_diasNome) console.warn('Tempo de Estoque: coluna de dias não encontrada por nome; usando fallback', diasCol, headers);
     // detecta a coluna de tipo de estoque: prioriza estoqueCol da API, depois header chamado "Estoque",
     // depois índice 31, por fim 'ESTOQUE'. Evita cair no fallback errado quando headers chegam fora de ordem.
     const _estoNome=headers.find(h=>String(h).trim().toLowerCase()==='estoque');
