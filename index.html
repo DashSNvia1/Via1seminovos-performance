@@ -6995,6 +6995,18 @@ function toggleBpLoja(rid){
 // ── AVALIAÇÕES (Mix gerencial) ───────────────────────────────────────────────
 let _av2Rows = [];
 let _av2Sheet = '';
+// ── Auditoria % pago × mercado: médias praticadas pelo mercado (SR e RP) e tolerância, salvas por mês ──
+function _av2MercGet(tipo){ // tipo: 'SR' | 'RP' | 'TOL'
+  const k='av2Merc_'+tipo+'_'+(_av2Sheet||'');
+  const d = tipo==='TOL' ? '1.3' : '';
+  const v=_ls(k,d); const n=parseFloat(String(v).replace(',','.'));
+  return isNaN(n)?(tipo==='TOL'?1.3:0):n;
+}
+function setAv2Merc(tipo,valor){
+  const n=parseFloat(String(valor).replace(',','.'));
+  _lsSet('av2Merc_'+tipo+'_'+(_av2Sheet||''), (!isNaN(n)&&n>0)?String(n):'');
+  renderAval2Content();
+}
 const _AV2_DIMS = [
   ['estado','Estado'], ['loja','Loja'], ['tipo','Tipo de Avaliação'], ['status','Status'],
   ['vendedor','Vendedor'], ['avaliador','Avaliador'], ['marca','Marca'], ['modelo','Modelo'],
@@ -7330,6 +7342,7 @@ function renderAval2Shell(){
     '<div id="av2-dup" style="margin-bottom:20px"></div>'+
     '<div id="av2-praca" style="margin-bottom:20px"></div>'+
     '<div id="av2-audit" style="margin-bottom:20px"></div>'+
+    '<div id="av2-mercado" style="margin-bottom:20px"></div>'+
     '<div id="av2-mix" style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:0"></div>'+
     '<div id="av2-mixdrill" style="margin:0 0 20px"></div>'+
     '<div id="av2-rank" style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:0"></div>'+
@@ -7839,6 +7852,135 @@ function exportAv2Audit(){
 }
 
 
+// ── Auditoria % pago × mercado ──
+// classifica uma avaliação vs a média de mercado da sua finalidade (SR/RP), com tolerância ±tol pp
+function _av2MercClassify(r, mSR, mRP, tol){
+  if(!(r.valorAval>=1000 && r.valorAval<=2000000)) return null;
+  if(!(r.fipe>0)) return null;
+  const pct=r.valorAval/r.fipe; if(pct>3) return null;
+  const isSR=String(r.finalidade).indexOf('SHOWROOM')>=0;
+  const isRP=String(r.finalidade).indexOf('REPASSE')>=0;
+  if(!isSR && !isRP) return null;
+  const merc=isSR?mSR:mRP; if(!(merc>0)) return null;
+  const p100=pct*100;
+  let cls; if(p100>merc+tol) cls='acima'; else if(p100<merc-tol) cls='abaixo'; else cls='linha';
+  return {p100, merc, cls, finalidade:isSR?'SHOWROOM':'REPASSE'};
+}
+const _AV2_CLS_LABEL={acima:'Acima do mercado', linha:'Em linha', abaixo:'Abaixo do mercado'};
+function _av2MercadoTable(rows){
+  const mSR=_av2MercGet('SR'), mRP=_av2MercGet('RP'), tol=_av2MercGet('TOL');
+  window._av2MercDrill={};
+  const porPraca={}; let X=0,Y=0,Z=0,N=0;
+  rows.forEach(r=>{
+    const c=_av2MercClassify(r,mSR,mRP,tol); if(!c) return;
+    N++; if(c.cls==='acima')X++; else if(c.cls==='linha')Y++; else Z++;
+    const e=r.estado||'(sem estado)';
+    if(!porPraca[e]) porPraca[e]={n:0,acima:0,linha:0,abaixo:0};
+    const P=porPraca[e]; P.n++; P[c.cls]++;
+    (window._av2MercDrill[e]=window._av2MercDrill[e]||[]).push({placa:r.placa,modelo:r.modelo,nossa:c.p100,mercado:c.merc,cls:c.cls,finalidade:c.finalidade});
+  });
+  window._av2MercTotais={X,Y,Z,N};
+  const pctf=v=>(v||0).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1});
+  const wrap='border:1px solid var(--border);border-radius:3px;overflow:hidden';
+  const head='background:#14343a;color:#fff;padding:8px 14px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;display:flex;align-items:center;gap:10px;flex-wrap:wrap';
+  const inp=(tipo,val,ph)=>'<input type="number" step="0.1" min="0" max="300" value="'+(val>0?val:'')+'" placeholder="'+ph+'" onchange="setAv2Merc(\''+tipo+'\',this.value)" style="width:62px;border:1px solid #555;border-radius:3px;padding:2px 6px;font-size:11px;font-weight:700;text-align:center;background:#2a2a2a;color:#fff">';
+  let h='<div style="'+wrap+'">'
+    +'<div style="'+head+'">'
+      +'<span>Auditoria % Pago × Mercado</span>'
+      +'<span style="font-weight:400;text-transform:none;font-size:10px;opacity:.85">mercado SHOWROOM</span>'+inp('SR',mSR,'ex 80')
+      +'<span style="font-weight:400;text-transform:none;font-size:10px;opacity:.85">REPASSE</span>'+inp('RP',mRP,'ex 90')
+      +'<span style="font-weight:400;text-transform:none;font-size:10px;opacity:.85">tolerância ±</span>'+inp('TOL',tol,'1.3')+'<span style="font-weight:400;text-transform:none;font-size:10px;opacity:.85">pp</span>'
+      +'<button onclick="exportAv2Mercado(\'SHOWROOM\')" style="margin-left:auto;background:#1a7a4c;border:none;color:#fff;border-radius:3px;padding:4px 12px;font-size:10px;font-weight:700;cursor:pointer;text-transform:none">⬇ Excel SHOWROOM</button>'
+      +'<button onclick="exportAv2Mercado(\'REPASSE\')" style="background:#b8860b;border:none;color:#fff;border-radius:3px;padding:4px 12px;font-size:10px;font-weight:700;cursor:pointer;text-transform:none">⬇ Excel REPASSE</button>'
+    +'</div>';
+  if(!(mSR>0) && !(mRP>0)){
+    h+='<div style="padding:16px;color:var(--muted);font-size:12px">Informe a média de % pago praticada pelo mercado para SHOWROOM e REPASSE nos campos acima. A classificação é feita placa a placa: cada avaliação é comparada à média da sua finalidade, com tolerância de ±'+pctf(tol)+' pp.</div></div>';
+    return h;
+  }
+  if(!N){
+    h+='<div style="padding:16px;color:var(--muted);font-size:12px">Nenhuma avaliação classificável para os filtros/finalidades com média informada.</div></div>';
+    return h;
+  }
+  // três caixas de resultado
+  const card=(rot,val,tot,cor,bg)=>'<div style="flex:1;min-width:170px;background:'+bg+';border:1px solid var(--border);border-radius:3px;padding:.7rem 1.1rem;text-align:center">'
+    +'<p style="font-size:10px;color:var(--muted);margin:0 0 4px;text-transform:uppercase;letter-spacing:.5px;font-weight:600">'+rot+'</p>'
+    +'<p style="font-size:22px;font-weight:700;margin:0;color:'+cor+'">'+val+' <span style="font-size:13px">('+pctf(tot?100*val/tot:0)+'%)</span></p></div>';
+  h+='<div style="display:flex;gap:12px;padding:14px;flex-wrap:wrap">'
+    + card('Acima do mercado',X,N,'#1a7a4c','#eaf7ef')
+    + card('Em linha (±'+pctf(tol)+'pp)',Y,N,'#1f5fbf','#eaf1fb')
+    + card('Abaixo do mercado',Z,N,'#c62828','#fdecec')
+    +'</div>';
+  const maiorRot = (X>=Y&&X>=Z)?'Acima':(Y>=Z?'Em linha':'Abaixo');
+  h+='<div style="font-size:11px;color:var(--muted);padding:0 14px 8px">'+_av2N(N)+' avaliações classificadas (SHOWROOM + REPASSE, com FIPE, R$1 mil–2 mi). Concentração atual: <b>'+maiorRot+'</b>. Ideal: maioria em <b>Em linha</b> e <b>Abaixo</b> — pagar no mercado ou abaixo.</div>';
+  // tabela por praça
+  const TH='background:#14343a;color:#fff;padding:7px 10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap';
+  const TD='padding:6px 10px;font-size:11px;white-space:nowrap;border-bottom:1px solid #eceff5';
+  h+='<div class="tbl-wrap"><table style="width:100%;border-collapse:collapse"><thead><tr>'
+    +'<th style="'+TH+';text-align:left">Praça</th>'
+    +'<th style="'+TH+';text-align:right">Avaliações</th>'
+    +'<th style="'+TH+';text-align:right">Acima</th>'
+    +'<th style="'+TH+';text-align:right">Em linha</th>'
+    +'<th style="'+TH+';text-align:right">Abaixo</th>'
+    +'<th style="'+TH+';text-align:right">% Em linha</th>'
+    +'</tr></thead><tbody>';
+  _av2OrdenaEstados(Object.keys(porPraca)).forEach((e,i)=>{
+    const P=porPraca[e]; const bg=i%2?'#f6f8fc':'#fff';
+    h+='<tr style="background:'+bg+'">'
+      +'<td style="'+TD+';font-weight:700">'+e+'</td>'
+      +'<td style="'+TD+';text-align:right">'+_av2N(P.n)+'</td>'
+      +'<td style="'+TD+';text-align:right;color:#1a7a4c;font-weight:700">'+_av2N(P.acima)+'</td>'
+      +'<td style="'+TD+';text-align:right;color:#1f5fbf;font-weight:700">'+_av2N(P.linha)+'</td>'
+      +'<td style="'+TD+';text-align:right;color:#c62828;font-weight:700">'+_av2N(P.abaixo)+'</td>'
+      +'<td style="'+TD+';text-align:right">'+pctf(P.n?100*P.linha/P.n:0)+'%</td>'
+      +'</tr>';
+  });
+  h+='<tr style="background:#14343a;color:#fff;font-weight:700">'
+    +'<td style="'+TD+';color:#fff">TOTAL</td>'
+    +'<td style="'+TD+';text-align:right;color:#fff">'+_av2N(N)+'</td>'
+    +'<td style="'+TD+';text-align:right;color:#fff">'+_av2N(X)+'</td>'
+    +'<td style="'+TD+';text-align:right;color:#fff">'+_av2N(Y)+'</td>'
+    +'<td style="'+TD+';text-align:right;color:#fff">'+_av2N(Z)+'</td>'
+    +'<td style="'+TD+';text-align:right;color:#fff">'+pctf(N?100*Y/N:0)+'%</td>'
+    +'</tr>';
+  h+='</tbody></table></div>'
+    +'<div style="font-size:10px;color:var(--muted);padding:6px 12px">Acima = pago &gt; mercado + '+pctf(tol)+'pp · Em linha = dentro de ±'+pctf(tol)+'pp · Abaixo = pago &lt; mercado − '+pctf(tol)+'pp. Cada avaliação usa a média da sua finalidade (SHOWROOM ou REPASSE).</div></div>';
+  return h;
+}
+// Excel por praça: Placa, Modelo, PAGA Nossa, Paga Mercado, Classificação, OBS
+function _av2MercMakeSheet(headers, dataRows){
+  const aoa=[headers].concat(dataRows);
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  const S_HDR={fill:{patternType:'solid',fgColor:{rgb:'000000'}},font:{color:{rgb:'FFFFFF'},bold:true},alignment:{horizontal:'center',vertical:'center'}};
+  const COLOR={'Acima do mercado':'1A7A4C','Em linha':'1F5FBF','Abaixo do mercado':'C00000'};
+  const nCols=headers.length, nRows=aoa.length;
+  for(let c=0;c<nCols;c++){ const ref=_av2ColLetter(c)+'1'; if(ws[ref]) ws[ref].s=Object.assign({},S_HDR); }
+  for(let r=1;r<nRows;r++){
+    [2,3].forEach(c=>{ const ref=_av2ColLetter(c)+(r+1); if(ws[ref]&&typeof ws[ref].v==='number'){ ws[ref].t='n'; ws[ref].z='0.0"%"'; ws[ref].s={alignment:{horizontal:'center'}}; } });
+    const ref4=_av2ColLetter(4)+(r+1);
+    if(ws[ref4]){ const col=COLOR[String(ws[ref4].v)]||'000000'; ws[ref4].s={font:{bold:true,color:{rgb:col}},alignment:{horizontal:'center'}}; }
+  }
+  ws['!cols']=[{wch:12},{wch:26},{wch:12},{wch:13},{wch:20},{wch:24}];
+  return ws;
+}
+function exportAv2Mercado(fin){
+  if(typeof XLSX==='undefined'){ alert('Componente de Excel não carregado. Recarregue a página.'); return; }
+  const drill=window._av2MercDrill||{};
+  const alvo=String(fin||'').toUpperCase(); // 'SHOWROOM' ou 'REPASSE'
+  // filtra por finalidade e remove praças que ficarem vazias
+  const estados=Object.keys(drill).filter(e=>(drill[e]||[]).some(x=>x.finalidade===alvo));
+  if(!estados.length){ alert('Sem carros de '+alvo+' classificáveis. Informe a média de mercado de '+alvo+' e verifique os filtros.'); return; }
+  const wb=XLSX.utils.book_new();
+  const headers=['Placa','Modelo','Paga Via1','Paga Mercado','Classificação','OBS'];
+  const ord={acima:0,linha:1,abaixo:2};
+  _av2OrdenaEstados(estados).forEach(e=>{
+    const list=(drill[e]||[]).filter(x=>x.finalidade===alvo).sort((a,b)=>(ord[a.cls]-ord[b.cls]) || (b.nossa-a.nossa));
+    if(!list.length) return;
+    const dataRows=list.map(x=>[x.placa||'—', x.modelo||'—', +Number(x.nossa).toFixed(1), +Number(x.mercado).toFixed(1), _AV2_CLS_LABEL[x.cls], '']);
+    XLSX.utils.book_append_sheet(wb, _av2MercMakeSheet(headers, dataRows), _av2XlsSheetName(e));
+  });
+  _av2DownloadXlsxFreezeA(wb, 'auditoria_pago_mercado_'+alvo.toLowerCase()+'_'+(_av2Sheet||'aba').replace(/[^a-zA-Z0-9]/g,'_')+'.xlsx');
+}
+
 function renderAval2Content(){
   const rowsAll=_av2Filtered();                       // tudo (para contar as < R$ 1 mil)
   const abaixo1k=rowsAll.filter(r=>r.valorAval<1000).length;
@@ -7852,6 +7994,8 @@ function renderAval2Content(){
   if(praca) praca.innerHTML=_av2PracaTable(rows);
   const audit=document.getElementById('av2-audit');
   if(audit) audit.innerHTML=_av2AuditTable(rows);
+  const merc=document.getElementById('av2-mercado');
+  if(merc) merc.innerHTML=_av2MercadoTable(rows);
 
   const total=rows.length;                            // total já SEM as < R$ 1 mil
   const validas=rows.filter(r=>r.valorAval<=2000000); // teto de sanidade p/ valores
