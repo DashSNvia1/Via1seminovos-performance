@@ -869,7 +869,7 @@ function _jsonpRaw(baseUrl, params, _tentativa) {
     window[cb] = data => { if(terminado) return; terminado = true; clearTimeout(tmr); limpar(); resolve(data); };
     const s = document.createElement('script');
     s.src = url;
-    s.onerror = () => { clearTimeout(tmr); falhar('Falha ao carregar script: ' + url); };
+    s.onerror = () => { clearTimeout(tmr); falhar('Não foi possível carregar os dados: o servidor (Apps Script) não respondeu com dados válidos — provável erro na planilha/aba de origem ou na conexão. Detalhe: ' + url); };
     document.head.appendChild(s);
   });
 }
