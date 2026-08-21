@@ -7927,7 +7927,7 @@ function _av2MercadoTable(rows){
     const e=r.estado||'(sem estado)';
     if(!porPraca[e]) porPraca[e]={n:0,acima:0,linha:0,abaixo:0};
     const P=porPraca[e]; P.n++; P[c.cls]++;
-    (window._av2MercDrill[e]=window._av2MercDrill[e]||[]).push({placa:r.placa,modelo:r.modelo,nossa:c.p100,mercado:c.merc,cls:c.cls,finalidade:c.finalidade});
+    (window._av2MercDrill[e]=window._av2MercDrill[e]||[]).push({placa:r.placa,modelo:r.modelo,vendedor:r.vendedor,data:r.data,nossa:c.p100,mercado:c.merc,cls:c.cls,finalidade:c.finalidade});
   });
   window._av2MercTotais={X,Y,Z,N};
   const pctf=v=>(v||0).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1});
@@ -8005,11 +8005,11 @@ function _av2MercMakeSheet(headers, dataRows){
   const nCols=headers.length, nRows=aoa.length;
   for(let c=0;c<nCols;c++){ const ref=_av2ColLetter(c)+'1'; if(ws[ref]) ws[ref].s=Object.assign({},S_HDR); }
   for(let r=1;r<nRows;r++){
-    [2,3].forEach(c=>{ const ref=_av2ColLetter(c)+(r+1); if(ws[ref]&&typeof ws[ref].v==='number'){ ws[ref].t='n'; ws[ref].z='0.0"%"'; ws[ref].s={alignment:{horizontal:'center'}}; } });
-    const ref4=_av2ColLetter(4)+(r+1);
-    if(ws[ref4]){ const col=COLOR[String(ws[ref4].v)]||'000000'; ws[ref4].s={font:{bold:true,color:{rgb:col}},alignment:{horizontal:'center'}}; }
+    [4,5].forEach(c=>{ const ref=_av2ColLetter(c)+(r+1); if(ws[ref]&&typeof ws[ref].v==='number'){ ws[ref].t='n'; ws[ref].z='0.0"%"'; ws[ref].s={alignment:{horizontal:'center'}}; } });
+    const ref6=_av2ColLetter(6)+(r+1);
+    if(ws[ref6]){ const col=COLOR[String(ws[ref6].v)]||'000000'; ws[ref6].s={font:{bold:true,color:{rgb:col}},alignment:{horizontal:'center'}}; }
   }
-  ws['!cols']=[{wch:12},{wch:26},{wch:12},{wch:13},{wch:20},{wch:24}];
+  ws['!cols']=[{wch:12},{wch:26},{wch:26},{wch:14},{wch:12},{wch:13},{wch:20},{wch:24}];
   return ws;
 }
 function exportAv2Mercado(fin){
@@ -8020,12 +8020,12 @@ function exportAv2Mercado(fin){
   const estados=Object.keys(drill).filter(e=>(drill[e]||[]).some(x=>x.finalidade===alvo));
   if(!estados.length){ alert('Sem carros de '+alvo+' classificáveis. Informe a média de mercado de '+alvo+' e verifique os filtros.'); return; }
   const wb=XLSX.utils.book_new();
-  const headers=['Placa','Modelo','Paga Via1','Paga Mercado','Classificação','OBS'];
+  const headers=['Placa','Modelo','Vendedor','Data de Criação','Paga Via1','Paga Mercado','Classificação','OBS'];
   const ord={acima:0,linha:1,abaixo:2};
   _av2OrdenaEstados(estados).forEach(e=>{
     const list=(drill[e]||[]).filter(x=>x.finalidade===alvo).sort((a,b)=>(ord[a.cls]-ord[b.cls]) || (b.nossa-a.nossa));
     if(!list.length) return;
-    const dataRows=list.map(x=>[x.placa||'—', x.modelo||'—', +Number(x.nossa).toFixed(1), +Number(x.mercado).toFixed(1), _AV2_CLS_LABEL[x.cls], '']);
+    const dataRows=list.map(x=>[x.placa||'—', x.modelo||'—', x.vendedor||'—', _av2FmtData(x.data), +Number(x.nossa).toFixed(1), +Number(x.mercado).toFixed(1), _AV2_CLS_LABEL[x.cls], '']);
     XLSX.utils.book_append_sheet(wb, _av2MercMakeSheet(headers, dataRows), _av2XlsSheetName(e));
   });
   _av2DownloadXlsxFreezeA(wb, 'auditoria_pago_mercado_'+alvo.toLowerCase()+'_'+(_av2Sheet||'aba').replace(/[^a-zA-Z0-9]/g,'_')+'.xlsx');
