@@ -7039,6 +7039,47 @@ function initAval2Page(){
   }).catch(()=>{ sel.innerHTML='<option>Erro ao carregar abas</option>'; });
 }
 
+// ── Cruzamento loja→estado ──
+// As abas "Oficina [Mês]" vêm sem o campo Estado. O painel APRENDE o estado de cada loja
+// a partir das abas normais (que trazem estado correto) e guarda em localStorage; depois
+// INFERE o estado das lojas de oficina casando pelo nome (tolerante a acento/caixa/"Oficina").
+function _av2NormLoja(s){
+  return String(s||'').toUpperCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')  // remove acentos
+    .replace(/\bOFICINA\b/g,' ')                        // ignora a palavra "Oficina"
+    .replace(/[^A-Z0-9]+/g,' ')                         // só alfanumérico
+    .replace(/\s+/g,' ').trim();
+}
+function _av2LojaEstadoMap(){
+  try{ return JSON.parse(_ls('av2LojaEstado','{}'))||{}; }catch(e){ return {}; }
+}
+function _av2AprendeEstado(rows){
+  const m=_av2LojaEstadoMap(); let mudou=false;
+  rows.forEach(r=>{
+    const est=String(r.estado||'').toUpperCase();
+    if(est && est!=='(SEM ESTADO)' && r.loja && r.loja!=='(sem loja)'){
+      const k=_av2NormLoja(r.loja);
+      if(k && m[k]!==est){ m[k]=est; mudou=true; }
+    }
+  });
+  if(mudou){ try{ _lsSet('av2LojaEstado', JSON.stringify(m)); }catch(e){} }
+  return m;
+}
+// Exceções manuais loja→estado (chave normalizada por _av2NormLoja) — para lojas que não
+// aparecem nas abas normais e por isso não são aprendidas automaticamente. Extensível.
+const _AV2_ESTADO_SEED = {
+  'JEEP RIO VERMELHO': 'BA'
+};
+function _av2InfereEstado(loja, mapa){
+  const k=_av2NormLoja(loja); if(!k) return null;
+  const combinado=Object.assign({}, mapa, _AV2_ESTADO_SEED); // exceções manuais têm prioridade
+  if(combinado[k]) return combinado[k];
+  const keys=Object.keys(combinado);
+  // casa por conteúdo: nome de oficina pode ter texto a mais/menos que a loja normal
+  let hit=keys.find(kk=>kk.length>=4 && (kk===k || kk.indexOf(k)>=0 || k.indexOf(kk)>=0));
+  return hit?combinado[hit]:null;
+}
+
 function loadAval2Sheet(name){
   const body=document.getElementById('aval2-body');
   body.innerHTML='<div style="padding:2rem;text-align:center;color:var(--muted)"><div class="spin2" style="margin:0 auto 8px"></div>Carregando avaliações...</div>';
@@ -7062,6 +7103,15 @@ function loadAval2Sheet(name){
       fipe: +r['FIPE']||0,                         // coluna AE
       km: +r['KM']||0                              // coluna AB
     })).filter(r=>r.loja!=='(sem loja)' || r.placa || r.marca!=='(sem marca)');
+
+    // aprende loja→estado das linhas que têm estado e infere para as que não têm (abas de oficina)
+    const _lmap=_av2AprendeEstado(_av2Rows);
+    _av2Rows.forEach(r=>{
+      if(String(r.estado).toUpperCase()==='(SEM ESTADO)'){
+        const inf=_av2InfereEstado(r.loja,_lmap);
+        if(inf) r.estado=inf;
+      }
+    });
 
     _AV2_DIMS.forEach(([k])=>{
       _av2All[k]=[...new Set(_av2Rows.map(r=>r[k]))].sort();
@@ -8087,10 +8137,10 @@ function renderAval2Content(){
   window._av2CardTitles = ['Classificação','Finalidade','Tipo de Avaliação','Top 10 — Marcas mais avaliadas','Top 10 — Modelos mais avaliados','Top 10 — Por Loja','Top 10 — Por Avaliador'];
   mix.innerHTML = _cardBlock('Classificação','Classificação','classif',0,'mix')
                 + _cardBlock('Finalidade','Finalidade','finalidade',0,'mix')
-                + _cardBlock('Tipo de Avaliação','Tipo','tipo',0,'mix');
+                + _cardBlock('Tipo de Avaliação','Tipo','tipo',0,'mix')
+                + _cardBlock('Top 10 — Modelos mais avaliados','Modelo','modelo',10,'mix');
 
   if(rank) rank.innerHTML = _cardBlock('Top 10 — Marcas mais avaliadas','Marca','marca',10,'rank')
-                          + _cardBlock('Top 10 — Modelos mais avaliados','Modelo','modelo',10,'rank')
                           + _cardBlock('Top 10 — Por Loja','Loja','loja',10,'rank')
                           + _cardBlock('Top 10 — Por Avaliador','Avaliador','avaliador',10,'rank');
   // fecha drills abertos ao re-render
