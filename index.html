@@ -1228,7 +1228,7 @@ var MODEL_ALIASES = {
 };
 // 2) Nomes-base que NÃO devem sofrer corte automático de sufixo (têm número/hífen legítimo).
 //    Se o modelo começar por um destes, ele é preservado como está (após tirar marca).
-var MODEL_KEEP = ['HB20','HB20S','CB300F','CB500','CB650','CG160','T-CROSS','HR-V','WR-V','CR-V','XC40','XC60','XC90','A3','A4','Q3','Q5','208','2008','308','C3','C4','GLA','GLC','MARCH','KWID','208','3008'];
+var MODEL_KEEP = ['HB20','HB20S','CB300F','CB500','CB650','CG160','T-CROSS','HR-V','WR-V','CR-V','XC40','XC60','XC90','A3','A4','Q3','Q5','208','2008','308','3008','C3','C4','GLA','GLC','MARCH','KWID'];
 
 function _stripModelSuffix(base){
   // remove sufixo de VERSÃO colado: nome + (dígitos e letras curtas), ex.: CRETA1TA -> CRETA, COMPASS2LM -> COMPASS
@@ -1273,6 +1273,16 @@ function extractFamily(m) {
   return base;
 }
 function toNum(v){const n=parseFloat(v);return isNaN(n)?0:n;}
+// ── % MARGEM: SEMPRE ponderada — Σ Margem R$ ÷ Σ Total Recebido ──────────────
+// NUNCA usar média simples dos percentuais: dá o mesmo peso a um carro de R$45 mil
+// e a um de R$280 mil, e como carro barato costuma ter % maior, superestima a margem.
+// kRec varia por aba: 'totalRecebido' (Vendas/Aging) ou 'tkm' (Giro).
+function pctMargem(rows, kMrg, kRec){
+  kMrg = kMrg || 'margemRS'; kRec = kRec || 'totalRecebido';
+  var m=0, r=0;
+  for(var i=0;i<rows.length;i++){ m += (rows[i][kMrg]||0); r += (rows[i][kRec]||0); }
+  return r ? m/r : 0;
+}
 // lê "dias em estoque" de uma linha tolerando variações de nome do cabeçalho
 // (DiasEstoque, "Dias Estoque", "Dias em Estoque", DIAS ESTOQUE, Dias). Evita zerar tudo se o header mudar.
 function _diasEstoque(r){
@@ -1295,9 +1305,7 @@ function renderKPIs(id) {
   const labels={geral:'Geral',bace:'Bahia e Ceará',pepb:'Pernambuco e Paraíba'};
   const tv=rows.reduce((s,r)=>s+r.vendas,0);
   // % Margem ponderada: soma da Margem R$ ÷ soma do Total Recebido (não média simples dos %)
-  const _smrs=rows.reduce((s,r)=>s+(r.margemRS||0),0);
-  const _srec=rows.reduce((s,r)=>s+(r.totalRecebido||0),0);
-  const am=_srec?_smrs/_srec:0;
+  const am=pctMargem(rows);
   const ap=rows.reduce((s,r)=>s+r.pago,0)/(rows.length||1);
   const af=rows.reduce((s,r)=>s+r.fipe,0)/(rows.length||1);
   const bv=new Set(rawRows.bace.map(r=>r.loja)).size;
@@ -1621,6 +1629,8 @@ function agingBadge(pct) {
   return `<span class="badge br">${p.toFixed(2)}%</span>`;
 }
 
+// [INATIVA] Versão antiga do Aging. O elemento 'aging-content' não existe no HTML,
+// então esta função retorna na 1ª linha. A aba real é loadAgingSheet > renderAgingBody > buildAgingView.
 function renderAging() {
   const el = document.getElementById('aging-content');
   if (!el) return;
@@ -1646,10 +1656,10 @@ function renderAging() {
   // For now compute combined (geral)
   function computeAging(rows) {
     const faixas = {
-      '(1) < 30 dias':  { label:'(1) < 30 dias',  qtd:0, tkmSum:0, mrgSum:0, pctSum:0, n:0, rows:[] },
-      '(2) 31 ~ 60 dias':{ label:'(2) 31 ~ 60 dias',qtd:0, tkmSum:0, mrgSum:0, pctSum:0, n:0, rows:[] },
-      '(3) 61 ~ 90 dias':{ label:'(3) 61 ~ 90 dias',qtd:0, tkmSum:0, mrgSum:0, pctSum:0, n:0, rows:[] },
-      '(4) > 90 dias':  { label:'(4) > 90 dias',   qtd:0, tkmSum:0, mrgSum:0, pctSum:0, n:0, rows:[] },
+      '(1) < 30 dias':  { label:'(1) < 30 dias',  qtd:0, tkmSum:0, mrgSum:0, n:0, rows:[] },
+      '(2) 31 ~ 60 dias':{ label:'(2) 31 ~ 60 dias',qtd:0, tkmSum:0, mrgSum:0, n:0, rows:[] },
+      '(3) 61 ~ 90 dias':{ label:'(3) 61 ~ 90 dias',qtd:0, tkmSum:0, mrgSum:0, n:0, rows:[] },
+      '(4) > 90 dias':  { label:'(4) > 90 dias',   qtd:0, tkmSum:0, mrgSum:0, n:0, rows:[] },
     };
     rows.forEach(r => {
       const f = faixaDias(r.diasEstoque);
@@ -1658,7 +1668,6 @@ function renderAging() {
       fx.qtd += r.vendas || 0;
       fx.tkmSum += r.totalRecebido || 0;
       fx.mrgSum += r.margemRS || 0;
-      fx.pctSum += r.margem || 0;
       fx.n++;
       fx.rows.push(r);
     });
@@ -1668,9 +1677,11 @@ function renderAging() {
       return {
         label: fx.label,
         qtd: fx.qtd,
-        tkm: fx.n ? fx.tkmSum / fx.n : 0,
-        tkmMrg: fx.n ? fx.mrgSum / fx.n : 0,
-        margem: fx.n ? fx.pctSum / fx.n : 0,
+        // TKM e TKM Mrg por UNIDADE vendida (qtd), não por nº de linhas
+        tkm: fx.qtd ? fx.tkmSum / fx.qtd : 0,
+        tkmMrg: fx.qtd ? fx.mrgSum / fx.qtd : 0,
+        // % Margem ponderada
+        margem: fx.tkmSum ? fx.mrgSum / fx.tkmSum : 0,
         n: fx.n
       };
     });
@@ -1678,9 +1689,11 @@ function renderAging() {
 
   const agingData = computeAging(all);
   const totQtd  = agingData.reduce((s,r)=>s+r.qtd, 0);
-  const totTkm  = agingData.reduce((s,r)=>s+r.tkm*r.n, 0) / (agingData.reduce((s,r)=>s+r.n,0)||1);
-  const totMrg  = agingData.reduce((s,r)=>s+r.tkmMrg*r.n,0) / (agingData.reduce((s,r)=>s+r.n,0)||1);
-  const totPct  = agingData.reduce((s,r)=>s+r.margem*r.n,0) / (agingData.reduce((s,r)=>s+r.n,0)||1);
+  const _mrgAll = all.reduce((s,r)=>s+(r.margemRS||0),0);
+  const _recAll = all.reduce((s,r)=>s+(r.totalRecebido||0),0);
+  const totTkm  = totQtd ? _recAll/totQtd : 0;
+  const totMrg  = totQtd ? _mrgAll/totQtd : 0;
+  const totPct  = pctMargem(all);
 
   // Build table
   const rows = agingData.map(r => `
@@ -4330,6 +4343,8 @@ function buildCriticoTab(regionId, rows, name, lojaFilter) {
   buildCriticoContent(criticoDiv, rows, name);
 }
 
+// [INATIVA] Versão antiga do Estoque Crítico. A aba real é loadCriticoSheet > renderCritico > _buildCriticoView.
+// Atenção: loadCriticoSheet não mapeia margem/margemRS/tkm — reativar exige ajustar o mapeamento antes.
 function buildCriticoContent(target, rows, name) {
   const body = target;
   const fmtN = v => (v||0).toLocaleString('pt-BR',{maximumFractionDigits:0});
@@ -4354,8 +4369,9 @@ function buildCriticoContent(target, rows, name) {
   });
   const porLoja=Object.values(lojaMap).sort((a,b)=>b.qtd-a.qtd);
 
-  const totalMrg=criticos.reduce((s,r)=>s+r.margem,0)/(criticos.length||1);
-  const allMrg=rows.reduce((s,r)=>s+r.margem,0)/(rows.length||1);
+  // % Margem ponderada (aqui a receita está em r.tkm, não em r.totalRecebido)
+  const totalMrg=pctMargem(criticos,'margemRS','tkm');
+  const allMrg=pctMargem(rows,'margemRS','tkm');
   const quedaMrg=allMrg-totalMrg;
 
   body.innerHTML=`
@@ -5982,17 +5998,17 @@ function renderVendaTop10() {
     rows.filter(filterRow).forEach(r => {
       const m = r.familia || r.modelo || '';
       if(!m) return;
-      if(!map[m]) map[m] = { vol:0, margemSum:0, margemRsSum:0, pagoSum:0, fipeSum:0 };
+      if(!map[m]) map[m] = { vol:0, margemRsSum:0, recSum:0, pagoSum:0, fipeSum:0 };
       map[m].vol++;
-      map[m].margemSum   += r.margem||0;
       map[m].margemRsSum += r.margemRS||0;
+      map[m].recSum      += r.totalRecebido||0;   // base da % Margem ponderada
       map[m].pagoSum     += r.pago||0;
       map[m].fipeSum     += r.fipe||0;
     });
     return Object.entries(map)
       .map(([m,d]) => ({ modelo:m, vol:d.vol,
-        margemRS: d.vol?d.margemRsSum/d.vol:0,
-        margem:   d.vol?d.margemSum/d.vol:0,
+        margemRS: d.vol?d.margemRsSum/d.vol:0,          // Margem R$ média por unidade
+        margem:   d.recSum?d.margemRsSum/d.recSum:0,    // ponderada (Σ Margem R$ ÷ Σ Total Recebido)
         pago:     d.vol?d.pagoSum/d.vol:0,
         fipe:     d.vol?d.fipeSum/d.vol:0 }))
       .sort((a,b) => b.vol-a.vol || b.margemRS-a.margemRS)
