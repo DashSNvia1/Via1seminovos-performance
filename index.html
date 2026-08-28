@@ -7135,7 +7135,8 @@ function _av2AprendeEstado(rows){
 // Exceções manuais loja→estado (chave normalizada por _av2NormLoja) — para lojas que não
 // aparecem nas abas normais e por isso não são aprendidas automaticamente. Extensível.
 const _AV2_ESTADO_SEED = {
-  'JEEP RIO VERMELHO': 'BA'
+  'JEEP RIO VERMELHO': 'BA',
+  'EUROVIA GEELY MADALENA': 'PE'   // Madalena = bairro do Recife
 };
 function _av2InfereEstado(loja, mapa){
   const k=_av2NormLoja(loja); if(!k) return null;
