@@ -65,7 +65,7 @@ body{background:var(--bg);color:var(--ink);font-family:'Segoe UI',system-ui,sans
 .config-hint{font-size:10px;color:var(--muted);background:#f5f4f0;border:1px solid var(--border);border-radius:3px;padding:8px 12px;line-height:1.6}
 
 /* FILTER BAR */
-.filter-bar{background:#fff;border-bottom:1px solid var(--border);padding:6px 20px;display:none;align-items:center;gap:8px}
+.filter-bar{background:#fff;border-bottom:1px solid var(--border);padding:6px 20px;display:none;align-items:center;gap:8px;flex-wrap:wrap}
 .filter-label{font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);font-weight:600;margin-bottom:2px}
 .sheet-select{background:#f5f4f0;border:1px solid var(--border2);color:var(--ink);padding:5px 26px 5px 8px;border-radius:3px;font-family:inherit;font-size:11px;outline:none;cursor:pointer;min-width:180px;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23666'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 7px center}
 .sheet-select:focus{border-color:var(--black)}
@@ -352,7 +352,7 @@ th:hover .col-rh,.col-rh:hover,.col-rh.rh-drag{opacity:1;background:rgba(255,255
   </div>
   <div style="margin-left:12px">
     <div class="filter-label">Operação</div>
-    <div id="vendaLojaWrap" style="position:relative;display:inline-block">
+    <div id="vendaLojaWrap" class="venda-dd-wrap" style="position:relative;display:inline-block">
       <button onclick="toggleVendaLojaDropdown()" style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--border2);border-radius:3px;padding:6px 14px;font-size:11px;font-weight:600;cursor:pointer;min-width:220px;justify-content:space-between">
         <span>Operação</span>
         <span id="vendaLojaLabel" style="color:var(--muted);font-weight:400">Todas as lojas</span>
@@ -370,6 +370,59 @@ th:hover .col-rh,.col-rh:hover,.col-rh.rh-drag{opacity:1;background:rgba(255,255
         <div id="vendaLojaItems"></div>
       </div>
     </div>
+  </div>
+  <div style="margin-left:12px">
+    <div class="filter-label">Marca</div>
+    <div class="venda-dd-wrap" style="position:relative;display:inline-block">
+      <button onclick="toggleVendaDD('vendaMarcaDD')" style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--border2);border-radius:3px;padding:6px 12px;font-size:11px;font-weight:600;cursor:pointer;min-width:170px;justify-content:space-between">
+        <span>Marca</span><span id="vendaMarcaLabel" style="color:var(--muted);font-weight:400">Todas</span>
+        <span style="font-size:9px;color:var(--muted)">&#9660;</span>
+      </button>
+      <div id="vendaMarcaDD" style="display:none;position:absolute;top:100%;left:0;z-index:999;background:#fff;border:1px solid var(--border);border-radius:3px;box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:260px;max-height:320px;overflow-y:auto;margin-top:2px">
+        <div style="padding:8px 12px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;position:sticky;top:0;background:#fff;z-index:1"><span style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Seleções múltiplas</span>
+          <span onclick="toggleVendaDD('vendaMarcaDD')" style="cursor:pointer;font-size:16px;color:var(--muted);line-height:1">&#8743;</span></div>
+        <label style="display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;border-bottom:1px solid #e0dfd8;font-size:12px;font-weight:600"><input type="checkbox" id="vendaMarcaAll" checked onchange="toggleTodasVendaMarcas(this.checked)"><span>Todas as marcas</span></label>
+        <div id="vendaMarcaItems"></div>
+      </div>
+    </div>
+  </div>
+  <div style="margin-left:12px">
+    <div class="filter-label">Modelo</div>
+    <div class="venda-dd-wrap" style="position:relative;display:inline-block">
+      <button onclick="toggleVendaDD('vendaModeloDD')" style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--border2);border-radius:3px;padding:6px 12px;font-size:11px;font-weight:600;cursor:pointer;min-width:170px;justify-content:space-between">
+        <span>Modelo</span><span id="vendaModeloLabel" style="color:var(--muted);font-weight:400">Todos</span>
+        <span style="font-size:9px;color:var(--muted)">&#9660;</span>
+      </button>
+      <div id="vendaModeloDD" style="display:none;position:absolute;top:100%;left:0;z-index:999;background:#fff;border:1px solid var(--border);border-radius:3px;box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:260px;max-height:320px;overflow-y:auto;margin-top:2px">
+        <div style="padding:8px 12px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;position:sticky;top:0;background:#fff;z-index:1"><span style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Seleções múltiplas</span>
+          <span onclick="toggleVendaDD('vendaModeloDD')" style="cursor:pointer;font-size:16px;color:var(--muted);line-height:1">&#8743;</span></div>
+        <div style="padding:7px 10px;border-bottom:1px solid #e0dfd8">
+          <input type="text" id="vendaModeloBusca" placeholder="Digitar para buscar..." oninput="filterVendaModeloDD(this.value)"
+            style="width:100%;box-sizing:border-box;border:1px solid var(--border2);border-radius:3px;padding:5px 8px;font-size:11px">
+        </div>
+        <label style="display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;border-bottom:1px solid #e0dfd8;font-size:12px;font-weight:600"><input type="checkbox" id="vendaModeloAll" checked onchange="toggleTodosVendaModelos(this.checked)"><span>Todos os modelos</span></label>
+        <div id="vendaModeloItems"></div>
+      </div>
+    </div>
+  </div>
+  <div style="margin-left:12px">
+    <div class="filter-label">Dias em Estoque</div>
+    <div class="venda-dd-wrap" style="position:relative;display:inline-block">
+      <button onclick="toggleVendaDD('vendaDiasDD')" style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--border2);border-radius:3px;padding:6px 12px;font-size:11px;font-weight:600;cursor:pointer;min-width:170px;justify-content:space-between">
+        <span>Dias</span><span id="vendaDiasLabel" style="color:var(--muted);font-weight:400">Todas</span>
+        <span style="font-size:9px;color:var(--muted)">&#9660;</span>
+      </button>
+      <div id="vendaDiasDD" style="display:none;position:absolute;top:100%;left:0;z-index:999;background:#fff;border:1px solid var(--border);border-radius:3px;box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:260px;max-height:320px;overflow-y:auto;margin-top:2px">
+        <div style="padding:8px 12px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;position:sticky;top:0;background:#fff;z-index:1"><span style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Faixas de aging</span>
+          <span onclick="toggleVendaDD('vendaDiasDD')" style="cursor:pointer;font-size:16px;color:var(--muted);line-height:1">&#8743;</span></div>
+        <label style="display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;border-bottom:1px solid #e0dfd8;font-size:12px;font-weight:600"><input type="checkbox" id="vendaDiasAll" checked onchange="toggleTodasVendaFaixas(this.checked)"><span>Todas as faixas</span></label>
+        <div id="vendaDiasItems"></div>
+      </div>
+    </div>
+  </div>
+  <div style="margin-left:14px;display:flex;align-items:center;gap:10px">
+    <span id="vendaFiltroInfo" style="font-size:11px;color:var(--muted)"></span>
+    <button onclick="resetVendaFiltros()" style="background:#fff;border:1px solid var(--border2);color:var(--muted);padding:5px 12px;border-radius:3px;font-size:11px;font-weight:600;cursor:pointer">Limpar filtros</button>
   </div>
   <span id="f-mes" style="display:none"></span>
   <span id="f-ano" style="display:none"></span>
@@ -1123,6 +1176,8 @@ async function loadSheet(name) {
       const finalidade=name.toUpperCase().includes('REPASSE')?'REPASSE':'SHOWROOM';
       return {
         loja, familia:extractFamily(r['MODELO']||r[' ']||r['']||''),
+        // Coluna MARCA (C) da base de vendas. Fallbacks cobrem abas antigas sem a coluna.
+        marca:String(r['MARCA']||r['Marca']||r['marca']||'').trim().toUpperCase(),
         vendas:toNum(r['( = ) Total']), margem:toNum(r['% Margem']),
         pago:toNum(r['%PAGO']), fipe:toNum(r['% VENDA FIPE VENDA']||r['% VENDA FIPE']||r['%FIPE']||r['FIPE']),
         tkm:toNum(r['TKM']),
@@ -1160,6 +1215,7 @@ async function loadSheet(name) {
         </label>`;
       }).join('');
     }
+    _vendaInitFiltros(base);   // Marca / Modelo / Dias em Estoque
 
     // Guess month/year
     const mu=name.toUpperCase();
@@ -1479,9 +1535,9 @@ function colDragOver(e){ e.preventDefault(); e.dataTransfer.dropEffect='move'; }
 function colDrop(e,type,targetIdx,tableId){
   e.preventDefault();
   if(_dragColType!==type || _dragColIdx===targetIdx) return;
-  const storageKey = type==='main'?'v1_colOrder_main':'v1_colOrder_detail';
+  const storageKey = type==='main'?'v1_colOrder_main':'v1_colOrder_detail_v2';
   const allMain=['familia','vendas','estoque','dias','tkm','margemRS','margem','pago','fipe'];
-  const allDet=['placa','modelo','loja','ano','km','diasEstoque','margem','margemRS','pago','fipe','totalRecebido'];
+  const allDet=['placa','marca','modelo','loja','ano','km','diasEstoque','margem','margemRS','pago','fipe','totalRecebido'];
   const allKeys = type==='main'?allMain:allDet;
   let order;
   try{ order=JSON.parse(_ls(storageKey,null))||allKeys; }catch(e){ order=[...allKeys]; }
@@ -1527,13 +1583,13 @@ function buildDetailTable(rows,did) {
   let sorted=[...rows];
   if(ds.col) sorted.sort((a,b)=>{let va=a[ds.col]??'',vb=b[ds.col]??'';if(typeof va==='string'){va=va.toLowerCase();vb=vb.toLowerCase();}return ds.dir==='asc'?(va>vb?1:va<vb?-1:0):(va<vb?1:va>vb?-1:0);});
   const allCols=[
-    {k:'placa',l:'Placa'},{k:'modelo',l:'Modelo'},{k:'loja',l:'Loja'},
+    {k:'placa',l:'Placa'},{k:'marca',l:'Marca'},{k:'modelo',l:'Modelo'},{k:'loja',l:'Loja'},
     {k:'ano',l:'Ano',r:true},{k:'km',l:'KM',r:true},{k:'diasEstoque',l:'Dias Est.',r:true},
     {k:'margem',l:'% Margem',r:true},{k:'margemRS',l:'Margem R$',r:true},
     {k:'pago',l:'% Pago',r:true},{k:'fipe',l:'% Venda FIPE',r:true},{k:'totalRecebido',l:'Total Rec.',r:true},
   ];
   // Aplica ordem salva
-  const savedDet=_ls('v1_colOrder_detail',null);
+  const savedDet=_ls('v1_colOrder_detail_v2',null);
   let cols=allCols;
   if(savedDet){
     try{
@@ -1550,6 +1606,7 @@ function buildDetailTable(rows,did) {
   sorted.forEach(r=>{
     const cells=cols.map(c=>{
       if(c.k==='placa')         return `<td>${r.placa||'—'}</td>`;
+      if(c.k==='marca')         return `<td>${r.marca||'—'}</td>`;
       if(c.k==='modelo')        return `<td>${r.modelo}</td>`;
       if(c.k==='loja')          return `<td>${r.loja}</td>`;
       if(c.k==='ano')           return `<td class="r">${r.ano||'—'}</td>`;
@@ -2263,10 +2320,7 @@ function exportAgingCSV() {
   a.download = 'Aging_Vendas.csv'; a.click();
 }
 
-function toggleVendaLojaDropdown() {
-  const dd = document.getElementById('vendaLojaDropdown');
-  if(dd) dd.style.display = dd.style.display==='none' ? 'block' : 'none';
-}
+function toggleVendaLojaDropdown() { toggleVendaDD('vendaLojaDropdown'); }
 
 function toggleTodasVendaLojas(checked) {
   document.querySelectorAll('.venda-loja-cb').forEach(cb => cb.checked = checked);
@@ -2292,24 +2346,208 @@ function _updateVendaLojaLabel() {
   if(lbl) lbl.textContent = sel.size===all.length ? 'Todas as lojas' : `${sel.size} selecionada${sel.size>1?'s':''}`;
 }
 
-function _applyVendaLojaFilter() {
+// ─── FILTROS DA ABA VENDAS POR MODELO ────────────────────────────────────────
+// Quatro filtros combinados por AND: Operação (loja), Marca (col. C),
+// Modelo (família agrupada, col. D) e Dias em Estoque (faixa de aging, col. G).
+// Convenção herdada do filtro de Operação: conjunto VAZIO = não filtra nada
+// (desmarcar tudo mostra tudo, em vez de esvaziar a tela).
+const VENDA_FAIXAS = [
+  {k:'0-30',  l:'0 a 30 dias',      test:d=>d<=30},
+  {k:'31-60', l:'31 a 60 dias',     test:d=>d>30 && d<=60},
+  {k:'61-90', l:'61 a 90 dias',     test:d=>d>60 && d<=90},
+  {k:'91+',   l:'91 dias ou mais',  test:d=>d>90}
+];
+function _vendaFaixaDe(d){
+  d = parseInt(d)||0;
+  for(let i=0;i<VENDA_FAIXAS.length;i++) if(VENDA_FAIXAS[i].test(d)) return VENDA_FAIXAS[i].k;
+  return '91+';
+}
+const SEM_MARCA = '(sem marca)';
+function _vendaMarcaDe(r){ return (r.marca && r.marca.trim()) ? r.marca.trim() : SEM_MARCA; }
+
+// Testa uma linha contra os filtros, podendo IGNORAR um deles (para montar
+// listas em cascata sem que o próprio filtro limite as próprias opções).
+function _vendaPassa(r, ignorar){
+  const L=window._vendaSelectedLojas, M=window._vendaSelMarcas,
+        O=window._vendaSelModelos,    F=window._vendaSelFaixas;
+  if(ignorar!=='loja'   && L && L.size && !L.has(r.loja)) return false;
+  if(ignorar!=='marca'  && M && M.size && !M.has(_vendaMarcaDe(r))) return false;
+  if(ignorar!=='modelo' && O && O.size && !O.has(r.familia)) return false;
+  if(ignorar!=='faixa'  && F && F.size && !F.has(_vendaFaixaDe(r.diasEstoque))) return false;
+  return true;
+}
+
+// Modelos em cascata: só os que existem sob os demais filtros ativos.
+function _vendaModelosDisponiveis(){
+  const all = window._allVendaRows;
+  if(!all) return [];
+  return [...new Set(all.geral.filter(r=>_vendaPassa(r,'modelo')).map(r=>r.familia).filter(Boolean))].sort();
+}
+// Mantém a seleção de modelo coerente quando Marca/Operação/Dias mudam.
+// _vendaModeloTodos=true significa "acompanhar a lista disponível".
+function _vendaSyncModelos(){
+  const disp = _vendaModelosDisponiveis();
+  window._vendaAllModelos = disp;
+  if(window._vendaModeloTodos !== false){
+    window._vendaSelModelos = new Set(disp);
+  } else {
+    const inter = new Set([...(window._vendaSelModelos||[])].filter(m=>disp.indexOf(m)!==-1));
+    window._vendaSelModelos = inter.size ? inter : new Set(disp);
+  }
+  _vendaRenderModeloItems();
+}
+
+function _vendaRenderMarcaItems(){
+  const box=document.getElementById('vendaMarcaItems'); if(!box) return;
+  const sel=window._vendaSelMarcas||new Set();
+  box.innerHTML=(window._vendaAllMarcas||[]).map(m=>
+    '<label style="display:flex;align-items:center;gap:10px;padding:8px 14px;cursor:pointer;border-bottom:1px solid #f5f4f0;font-size:11px" onmouseenter="this.style.background=\'#f5f4f0\'" onmouseleave="this.style.background=\'\'">'
+    +'<input type="checkbox" class="venda-marca-cb" data-v="'+String(m).replace(/"/g,'&quot;')+'" '+(sel.has(m)?'checked':'')+' onchange="onVendaMarcaCb()">'
+    +'<span style="flex:1">'+m+'</span></label>').join('');
+}
+function _vendaRenderModeloItems(){
+  const box=document.getElementById('vendaModeloItems'); if(!box) return;
+  const sel=window._vendaSelModelos||new Set();
+  box.innerHTML=(window._vendaAllModelos||[]).map(m=>
+    '<label class="venda-modelo-opt" data-txt="'+String(m).replace(/"/g,'&quot;')+'" style="display:flex;align-items:center;gap:10px;padding:8px 14px;cursor:pointer;border-bottom:1px solid #f5f4f0;font-size:11px" onmouseenter="this.style.background=\'#f5f4f0\'" onmouseleave="this.style.background=\'\'">'
+    +'<input type="checkbox" class="venda-modelo-cb" data-v="'+String(m).replace(/"/g,'&quot;')+'" '+(sel.has(m)?'checked':'')+' onchange="onVendaModeloCb()">'
+    +'<span style="flex:1">'+m+'</span></label>').join('');
+  const busca=document.getElementById('vendaModeloBusca');
+  if(busca && busca.value) filterVendaModeloDD(busca.value);
+}
+function _vendaRenderDiasItems(){
+  const box=document.getElementById('vendaDiasItems'); if(!box) return;
+  const sel=window._vendaSelFaixas||new Set();
+  const cnt=window._vendaFaixaCount||{};
+  box.innerHTML=VENDA_FAIXAS.map(f=>
+    '<label style="display:flex;align-items:center;gap:10px;padding:8px 14px;cursor:pointer;border-bottom:1px solid #f5f4f0;font-size:11px" onmouseenter="this.style.background=\'#f5f4f0\'" onmouseleave="this.style.background=\'\'">'
+    +'<input type="checkbox" class="venda-faixa-cb" data-v="'+f.k+'" '+(sel.has(f.k)?'checked':'')+' onchange="onVendaFaixaCb()">'
+    +'<span style="flex:1">'+f.l+'</span>'
+    +'<span style="color:var(--muted);font-size:10px">'+(cnt[f.k]||0)+'</span></label>').join('');
+}
+
+// Chamado pelo loadSheet depois de montar as lojas
+function _vendaInitFiltros(base){
+  window._vendaAllMarcas = [...new Set(base.map(_vendaMarcaDe))].sort();
+  window._vendaSelMarcas = new Set(window._vendaAllMarcas);
+  window._vendaSelFaixas = new Set(VENDA_FAIXAS.map(f=>f.k));
+  window._vendaModeloTodos = true;
+  window._vendaFaixaCount = {};
+  base.forEach(r=>{ const k=_vendaFaixaDe(r.diasEstoque); window._vendaFaixaCount[k]=(window._vendaFaixaCount[k]||0)+1; });
+  const b=document.getElementById('vendaModeloBusca'); if(b) b.value='';
+  ['vendaMarcaAll','vendaModeloAll','vendaDiasAll'].forEach(id=>{ const el=document.getElementById(id); if(el) el.checked=true; });
+  _vendaRenderMarcaItems();
+  _vendaRenderDiasItems();
+  _vendaSyncModelos();
+  _vendaAtualizaLabels();
+}
+
+function toggleVendaDD(id){
+  ['vendaLojaDropdown','vendaMarcaDD','vendaModeloDD','vendaDiasDD'].forEach(x=>{
+    const dd=document.getElementById(x);
+    if(dd) dd.style.display = (x===id && dd.style.display==='none') ? 'block' : 'none';
+  });
+}
+function filterVendaModeloDD(txt){
+  const t=String(txt||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().trim();
+  document.querySelectorAll('.venda-modelo-opt').forEach(l=>{
+    const v=String(l.dataset.txt||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase();
+    l.style.display = (!t || v.indexOf(t)!==-1) ? 'flex' : 'none';
+  });
+}
+function toggleTodasVendaMarcas(ck){
+  window._vendaSelMarcas = ck ? new Set(window._vendaAllMarcas||[]) : new Set();
+  _vendaRenderMarcaItems(); _applyVendaFilters();
+}
+function onVendaMarcaCb(){
+  window._vendaSelMarcas = new Set([...document.querySelectorAll('.venda-marca-cb:checked')].map(c=>c.dataset.v));
+  const a=document.getElementById('vendaMarcaAll');
+  if(a) a.checked = window._vendaSelMarcas.size === (window._vendaAllMarcas||[]).length;
+  _applyVendaFilters();
+}
+function toggleTodosVendaModelos(ck){
+  window._vendaModeloTodos = !!ck;
+  window._vendaSelModelos = ck ? new Set(window._vendaAllModelos||[]) : new Set();
+  _vendaRenderModeloItems(); _applyVendaFilters();
+}
+function onVendaModeloCb(){
+  window._vendaSelModelos = new Set([...document.querySelectorAll('.venda-modelo-cb:checked')].map(c=>c.dataset.v));
+  window._vendaModeloTodos = window._vendaSelModelos.size === (window._vendaAllModelos||[]).length;
+  const a=document.getElementById('vendaModeloAll'); if(a) a.checked=window._vendaModeloTodos;
+  _applyVendaFilters();
+}
+function toggleTodasVendaFaixas(ck){
+  window._vendaSelFaixas = ck ? new Set(VENDA_FAIXAS.map(f=>f.k)) : new Set();
+  _vendaRenderDiasItems(); _applyVendaFilters();
+}
+function onVendaFaixaCb(){
+  window._vendaSelFaixas = new Set([...document.querySelectorAll('.venda-faixa-cb:checked')].map(c=>c.dataset.v));
+  const a=document.getElementById('vendaDiasAll');
+  if(a) a.checked = window._vendaSelFaixas.size === VENDA_FAIXAS.length;
+  _applyVendaFilters();
+}
+function resetVendaFiltros(){
+  const all=window._allVendaRows; if(!all) return;
+  window._vendaSelectedLojas = new Set(window._vendaAllLojas||[]);
+  document.querySelectorAll('.venda-loja-cb').forEach(cb=>cb.checked=true);
+  const la=document.getElementById('vendaLojaAll'); if(la) la.checked=true;
+  _vendaInitFiltros(all.geral);
+  _applyVendaFilters();
+}
+
+function _vendaAtualizaLabels(){
+  const set=(id,sel,all,todos)=>{
+    const el=document.getElementById(id); if(!el) return;
+    const n=sel?sel.size:0, t=(all||[]).length;
+    el.textContent = (n===0 || n===t) ? todos : (n+' selecionad'+(todos==='Todas'?'a':'o')+(n>1?'s':''));
+  };
+  set('vendaMarcaLabel',  window._vendaSelMarcas,  window._vendaAllMarcas,  'Todas');
+  set('vendaModeloLabel', window._vendaSelModelos, window._vendaAllModelos, 'Todos');
+  const fl=document.getElementById('vendaDiasLabel');
+  if(fl){
+    const F=window._vendaSelFaixas||new Set();
+    fl.textContent = (F.size===0 || F.size===VENDA_FAIXAS.length)
+      ? 'Todas'
+      : VENDA_FAIXAS.filter(f=>F.has(f.k)).map(f=>f.k).join(', ');
+  }
+  _updateVendaLojaLabel();
+}
+
+// Aba ativa da barra de Vendas (para re-renderizar o KPI certo)
+function _vendaTabAtiva(){
+  const b=document.querySelector('#tabNav .tab-btn.active');
+  const m=b && b.getAttribute('onclick') && b.getAttribute('onclick').match(/'(\w+)'/);
+  return m ? m[1] : 'geral';
+}
+
+function _applyVendaFilters(){
   const all = window._allVendaRows;
   if(!all) return;
-  const sel = window._vendaSelectedLojas;
-  const filterFn = r => !sel || sel.size===0 || sel.has(r.loja);
-  const geralF=all.geral.filter(filterFn), baceF=all.bace.filter(filterFn), pepbF=all.pepb.filter(filterFn);
+  _vendaSyncModelos();                       // cascata Marca/Operação/Dias -> Modelo
+  const ok = r => _vendaPassa(r, null);
+  const geralF=all.geral.filter(ok), baceF=all.bace.filter(ok), pepbF=all.pepb.filter(ok);
   store.geral=aggregate(geralF); store.bace=aggregate(baceF); store.pepb=aggregate(pepbF);
   rawRows.geral=geralF; rawRows.bace=baceF; rawRows.pepb=pepbF;
   renderVendasTable('geral'); renderVendasTable('bace'); renderVendasTable('pepb');
+  renderKPIs(_vendaTabAtiva());              // antes o KPI ficava congelado ao filtrar
+  _vendaAtualizaLabels();
+  const info=document.getElementById('vendaFiltroInfo');
+  if(info){
+    const tot=all.geral.length, f=geralF.length;
+    info.innerHTML = (f===tot)
+      ? 'Mostrando <b style="color:var(--ink)">'+tot+'</b> vendas'
+      : 'Mostrando <b style="color:var(--ink)">'+f+'</b> de <b style="color:var(--ink)">'+tot+'</b> vendas';
+  }
 }
+// Compatibilidade: os handlers do filtro de Operação chamam este nome
+function _applyVendaLojaFilter(){ _applyVendaFilters(); }
 
 // Fecha dropdown ao clicar fora
 document.addEventListener('click', function(e) {
-  const wrap = document.getElementById('vendaLojaWrap');
-  if(wrap && !wrap.contains(e.target)) {
-    const dd = document.getElementById('vendaLojaDropdown');
-    if(dd) dd.style.display = 'none';
-  }
+  if(e.target.closest && e.target.closest('.venda-dd-wrap')) return;
+  ['vendaLojaDropdown','vendaMarcaDD','vendaModeloDD','vendaDiasDD'].forEach(id=>{
+    const dd=document.getElementById(id); if(dd) dd.style.display='none';
+  });
 });
 
 function filterVendasByLoja(loja) {
@@ -2366,6 +2604,7 @@ function buscarPlacas() {
   h += `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px">
     <thead><tr style="background:#1e1e1e;color:#fff">
       <th style="padding:6px 10px;text-align:left">Placa</th>
+      <th style="padding:6px 10px;text-align:left">Marca</th>
       <th style="padding:6px 10px;text-align:left">Modelo</th>
       <th style="padding:6px 10px;text-align:left">Loja</th>
       <th style="padding:6px 10px;text-align:right">TKM</th>
@@ -2382,6 +2621,7 @@ function buscarPlacas() {
     const margemCol = r.margem < 0 ? 'color:var(--red)' : r.margem > 0.08 ? 'color:var(--green)' : 'color:var(--amber)';
     h += `<tr style="background:${bg};border-bottom:1px solid var(--border)">
       <td style="padding:6px 10px;font-weight:700;font-family:monospace">${r.placa||'—'}</td>
+      <td style="padding:6px 10px">${r.marca||'—'}</td>
       <td style="padding:6px 10px">${r.modeloFull||r.modelo||'—'}</td>
       <td style="padding:6px 10px;color:var(--muted)">${r.loja||'—'}</td>
       <td style="padding:6px 10px;text-align:right">${r.tkm?'R$ '+Math.round(r.tkm).toLocaleString('pt-BR'):'—'}</td>
@@ -2400,9 +2640,10 @@ function buscarPlacas() {
 
 function exportarPlacasExcel() {
   if(!_placasFoundRows.length) return;
-  const headers = ['Placa','Modelo','Loja','TKM','Dias Estoque','% Margem','Margem R$','% Pago','% Venda FIPE','Total Recebido'];
+  const headers = ['Placa','Marca','Modelo','Loja','TKM','Dias Estoque','% Margem','Margem R$','% Pago','% Venda FIPE','Total Recebido'];
   const rows = _placasFoundRows.map(r => [
     r.placa||'',
+    r.marca||'',
     r.modeloFull||r.modelo||'',
     r.loja||'',
     r.tkm ? Math.round(r.tkm) : '',
@@ -2416,7 +2657,7 @@ function exportarPlacasExcel() {
 
   const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
   // Column widths
-  ws['!cols'] = [10,30,30,12,12,12,14,10,14,14].map(w=>({wch:w}));
+  ws['!cols'] = [10,18,30,30,12,12,12,14,10,14,14].map(w=>({wch:w}));
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Análise Placas');
   XLSX.writeFile(wb, 'analise_placas.xlsx');
