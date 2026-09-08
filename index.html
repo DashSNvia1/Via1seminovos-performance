@@ -1431,7 +1431,7 @@ async function loadEstoqueForVendas(vendasSheet){
       const modelo=String(r['MODELO']||r['Modelo']||r['modelo']||'').trim();
       const loja=String(r['EMPRESA']||r['Empresa']||r['LOJA']||r['Loja']||r['loja']||'').trim().toUpperCase();
       const tipo=String(r[ecol]||'').trim();
-      const finalidade=SHOWROOM_TIPOS.some(t=>tipo.includes(t.split(' ')[0]))?'SHOWROOM':REPASSE_TIPOS.some(t=>tipo.includes('REPASSE'))?'REPASSE':'OUTRO';
+      const finalidade=finalidadeEstoque(tipo);
       return {familia:extractFamily(modelo), loja, finalidade};
     }).filter(r=>r.familia);
     window._estoqueStockSheet = alvo;
@@ -3530,7 +3530,7 @@ async function loadTempoEstoqueSheet(name){
         tipo: tipo,
         proposta: String(r[_propKey]||'').trim().toLowerCase()==='sim',
         pedido: String(r[_pedKey]||'').trim().toLowerCase()==='sim',
-        finalidade: SHOWROOM_TIPOS.some(t=>tipo.includes(t.split(' ')[0]))?'SHOWROOM':(String(tipo).toUpperCase().includes('REPASSE')?'REPASSE':'OUTRO')
+        finalidade: finalidadeEstoque(tipo)
       };
     }).filter(r=>r.familia && !r.loja.includes('NEWVIA'));
     window._tempoEstoqueRows=rows;
@@ -3758,10 +3758,7 @@ function buildTempoEstTab(regId, regionRows, name, lojaFilter){
         +'<span onclick="toggleTempoEstTipoDD()" style="cursor:pointer;font-size:16px;color:var(--muted);line-height:1">∧</span>'
       +'</div>'
       +allT.map(t=>{
-        const isSR=SHOWROOM_TIPOS.some(s=>t.includes(s.split(' - ')[0]));
-        const isRP=t.includes('REPASSE');
-        const tag=isSR?'<span style="font-size:9px;background:#e8f5ee;color:var(--green);border-radius:2px;padding:1px 4px;margin-left:6px">SHOWROOM</span>':
-                  isRP?'<span style="font-size:9px;background:#fff3e0;color:var(--amber);border-radius:2px;padding:1px 4px;margin-left:6px">REPASSE</span>':'';
+        const tag=tagFinalidade(t);
         return '<label style="display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;border-bottom:1px solid #f5f4f0;font-size:12px" onmouseenter="this.style.background=\'#f5f4f0\'" onmouseleave="this.style.background=\'\'">'
           +'<input type="checkbox" '+(selT.has(t)?'checked':'')+' onchange="toggleTempoEstTipo(\''+t.replace(/'/g,"\\'")+'\')">'
           +'<span style="flex:1">'+t+'</span>'+tag+'</label>';
@@ -3783,7 +3780,7 @@ function buildTempoEstTab(regId, regionRows, name, lojaFilter){
         +'<span>Todas as lojas</span></label>'
       +lojas.map(l=>'<label style="display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;border-bottom:1px solid #f5f4f0;font-size:12px" onmouseenter="this.style.background=\'#f5f4f0\'" onmouseleave="this.style.background=\'\'">'
         +'<input type="checkbox" '+(selLojas.has(l)?'checked':'')+' onchange="toggleTempoEstLoja(\''+regId+'\',\''+l.replace(/'/g,"\\'")+'\')">'
-        +'<span style="flex:1">'+l+'</span></label>').join('')
+        +'<span style="flex:1">'+l+'</span>'+tagRegional(l)+'</label>').join('')
     +'</div></div>';
   const chkPP='<div style="display:flex;align-items:center;gap:14px;padding:0 6px;border-left:1px solid var(--border2);margin-left:2px">'
     +'<span style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--muted)">Pedido / Proposta</span>'
@@ -4931,8 +4928,58 @@ let _estoqueAllTipos = [];
 let _estoqueSelectedTipos = new Set();
 let _estoqueCol = 'ESTOQUE';
 
-const SHOWROOM_TIPOS = ['VOF - USADOS OFICINA','VS - VEICULOS USADOS SHOWROOM','VEICULOS SEMINOVOS BA (12 MESES)'];
+const SHOWROOM_TIPOS = ['VOF - USADOS OFICINA','VS - VEICULOS USADOS SHOWROOM','VU - VEICULOS USADOS','VEICULOS SEMINOVOS BA (12 MESES)'];
 const REPASSE_TIPOS  = ['VR - VEICULOS USADOS REPASSE'];
+
+// ── CLASSIFICADOR ÚNICO: tipo de estoque -> SHOWROOM / REPASSE / OUTRO ───────
+// Classifica pela SIGLA (o que vem antes do primeiro " - "), não por substring.
+//
+// BUG QUE ISTO CORRIGE: o código antigo fazia
+//   SHOWROOM_TIPOS.some(t => tipo.includes(t.split(' ')[0]))
+// e 'VEICULOS SEMINOVOS BA (12 MESES)'.split(' ')[0] === 'VEICULOS'.
+// Como 'VR - VEICULOS USADOS REPASSE' contém 'VEICULOS', TODO repasse era
+// classificado como SHOWROOM e a finalidade REPASSE nunca existia. Efeito
+// visível: na aba Vendas por Modelo, numa aba de REPASSE, a coluna
+// "Em Estoque" ficava 0 em todas as linhas.
+//
+// Para incluir uma sigla nova no showroom, basta acrescentar em SIGLAS_SHOWROOM.
+const SIGLAS_SHOWROOM = ['VOF','VS','VU'];
+function finalidadeEstoque(tipo){
+  const t = String(tipo||'').toUpperCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim();
+  if(!t) return 'OUTRO';
+  const sigla = (t.split(/\s*-\s*/)[0]||'').trim();
+  // REPASSE primeiro: 'VR - VEICULOS USADOS REPASSE' não pode cair no showroom
+  if(sigla==='VR' || t.indexOf('REPASSE')>=0) return 'REPASSE';
+  if(SIGLAS_SHOWROOM.indexOf(sigla)>=0) return 'SHOWROOM';
+  if(t.indexOf('SEMINOVOS')>=0) return 'SHOWROOM';   // 'VEICULOS SEMINOVOS BA (12 MESES)'
+  return 'OUTRO';
+}
+// Etiqueta colorida do tipo de estoque, usada nos dropdowns
+function tagFinalidade(tipo){
+  const f = finalidadeEstoque(tipo);
+  if(f==='SHOWROOM') return '<span style="font-size:9px;background:#e8f5ee;color:var(--green);border-radius:2px;padding:1px 4px;margin-left:6px">SHOWROOM</span>';
+  if(f==='REPASSE')  return '<span style="font-size:9px;background:#fff3e0;color:var(--amber);border-radius:2px;padding:1px 4px;margin-left:6px">REPASSE</span>';
+  return '';
+}
+
+// ── ETIQUETA REGIONAL (BA/CE · PE/PB) para os dropdowns "Por Loja" ──────────
+// Prioriza o sufixo explícito de estado — "( PE )", "(BA)" etc. — que existe nas
+// bases de Oficina / Back / Avaliações. Sem sufixo, cai nas listas e palavras-chave.
+function regionalDeLoja(loja){
+  const u = String(loja||'').toUpperCase();
+  if(/\((\s*)(PE|PB)(\s*)\)/.test(u)) return 'PE/PB';
+  if(/\((\s*)(BA|CE)(\s*)\)/.test(u)) return 'BA/CE';
+  if(isEstoquePEpb(u)) return 'PE/PB';
+  if(isEstoqueBAce(u)) return 'BA/CE';
+  return '';
+}
+function tagRegional(loja){
+  const r = regionalDeLoja(loja);
+  if(r==='BA/CE') return '<span style="font-size:9px;background:#e8f5ee;color:var(--green);border-radius:2px;padding:1px 4px;margin-left:6px">BA/CE</span>';
+  if(r==='PE/PB') return '<span style="font-size:9px;background:#e8f0fd;color:#1a3c8a;border-radius:2px;padding:1px 4px;margin-left:6px">PE/PB</span>';
+  return '';
+}
 
 // Lojas exatas da base de estoque por regional
 const ESTOQUE_BACE = ['VIA SUL DUNAS','BYD - CAMINHO DAS ARVORES','BYD - WASHINGTON SOARES','NISSAN PARALELA','RENAULT BONOCO SEMINOVOS','RENAULT IGUATEMI','RENAULT LAURO'];
@@ -4993,7 +5040,7 @@ async function loadEstoqueSheet(name) {
       const loja   = String(r['EMPRESA']||r['Empresa']||r['LOJA']||r['Loja']||r['loja']||'').trim().toUpperCase();
       const tipo   = String(r[_estoqueCol]||'').trim();
       const placa  = String(r['PLACA']||r['Placa']||r['placa']||'').trim().toUpperCase();
-      const finalidade = SHOWROOM_TIPOS.some(t=>tipo.includes(t.split(' ')[0]))?'SHOWROOM':REPASSE_TIPOS.some(t=>tipo.includes('REPASSE'))?'REPASSE':'OUTRO';
+      const finalidade = finalidadeEstoque(tipo);
       const proposta = String(r[_propKey]||'').trim().toLowerCase() === 'sim';
       const pedido   = String(r[_pedKey]||'').trim().toLowerCase() === 'sim';
       return { modelo: extractFamily(modelo), modeloFull: modelo, loja, tipo, finalidade, placa, proposta, pedido };
@@ -5004,7 +5051,7 @@ async function loadEstoqueSheet(name) {
 
     // Seleção padrão: apenas SHOWROOM e REPASSE (excluindo UD, UE, VA etc.)
     const defaultTipos = _estoqueAllTipos.filter(t =>
-      SHOWROOM_TIPOS.some(s=>t.includes(s.split(' - ')[0]))||REPASSE_TIPOS.some(s=>t.includes('REPASSE'))
+      finalidadeEstoque(t)!=='OUTRO'
     );
     _estoqueSelectedTipos = new Set(defaultTipos.length ? defaultTipos : _estoqueAllTipos);
 
@@ -5141,10 +5188,7 @@ function renderEstoque(rows, name) {
             <span onclick="toggleEstoqueDropdown()" style="cursor:pointer;font-size:16px;color:var(--muted);line-height:1">∧</span>
           </div>
           ${_estoqueAllTipos.map(t => {
-            const isSR = SHOWROOM_TIPOS.some(s=>t.includes(s.split(' - ')[0]));
-            const isRP = t.includes('REPASSE');
-            const tag  = isSR?'<span style="font-size:9px;background:#e8f5ee;color:var(--green);border-radius:2px;padding:1px 4px;margin-left:6px">SHOWROOM</span>':
-                         isRP?'<span style="font-size:9px;background:#fff3e0;color:var(--amber);border-radius:2px;padding:1px 4px;margin-left:6px">REPASSE</span>':'';
+            const tag = tagFinalidade(t);
             return `<label style="display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;border-bottom:1px solid #f5f4f0;font-size:12px" onmouseenter="this.style.background='#f5f4f0'" onmouseleave="this.style.background=''">
               <input type="checkbox" class="estoque-tipo-cb" data-tipo="${t}" ${_estoqueSelectedTipos.has(t)?'checked':''} onchange="toggleEstoqueTipo('${t.replace(/'/g,"\\'")}')">
               <span style="flex:1">${t}</span>${tag}
@@ -5594,7 +5638,7 @@ async function loadAgingEstoqueSheet(name) {
     _agingEstoqueAllTipos=[...new Set(_agingEstoqueRawRows.map(r=>r.tipo).filter(Boolean))].sort();
     _agingEstoqueAllLojas=[...new Set(_agingEstoqueRawRows.map(r=>r.loja).filter(Boolean))].sort();
     // Seleção padrão: tipos SHOWROOM/REPASSE
-    const defTipos=_agingEstoqueAllTipos.filter(t=>SHOWROOM_TIPOS.some(s=>t.includes(s.split(' - ')[0]))||t.includes('REPASSE'));
+    const defTipos=_agingEstoqueAllTipos.filter(t=>finalidadeEstoque(t)!=='OUTRO');
     _agingEstoqueSelectedTipos=new Set(defTipos.length?defTipos:_agingEstoqueAllTipos);
     _agingEstoqueSelectedLojas=new Set(_agingEstoqueAllLojas);
 
@@ -6425,7 +6469,7 @@ function _ofDropdown(k, titulo){
   const opts = _ofAll[k].map(v =>
     '<label style="display:flex;align-items:center;gap:10px;padding:7px 14px;cursor:pointer;border-bottom:1px solid #f5f4f0;font-size:11px" onmouseenter="this.style.background=\'#f5f4f0\'" onmouseleave="this.style.background=\'\'">'+
     '<input type="checkbox" class="of-cb-'+k+'" data-v="'+v.replace(/"/g,'&quot;')+'" checked onchange="toggleOfItem(\''+k+'\',\''+v.replace(/'/g,"\\'")+'\')">'+
-    '<span style="flex:1">'+v+'</span></label>').join('');
+    '<span style="flex:1">'+v+'</span>'+(k==='loja'?tagRegional(v):'')+'</label>').join('');
   return '<div style="position:relative;display:inline-block" class="of-dd-wrap">'+
     '<button onclick="toggleOfDD(\''+k+'\')" style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--border);border-radius:3px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;min-width:170px;justify-content:space-between">'+
       '<span>'+titulo+'</span><span id="ofLbl_'+k+'" style="color:var(--muted);font-weight:400">'+_ofDDLabel(k)+'</span><span style="font-size:10px;color:var(--muted)">▼</span>'+
@@ -7025,7 +7069,7 @@ function _bpDropdown(k, titulo){
   const opts = _bpAll[k].map(v =>
     '<label style="display:flex;align-items:center;gap:10px;padding:7px 14px;cursor:pointer;border-bottom:1px solid #f5f4f0;font-size:11px" onmouseenter="this.style.background=\'#f5f4f0\'" onmouseleave="this.style.background=\'\'">'+
     '<input type="checkbox" class="bp-cb-'+k+'" data-v="'+v.replace(/"/g,'&quot;')+'" checked onchange="toggleBpItem(\''+k+'\',\''+v.replace(/'/g,"\\'")+'\')">'+
-    '<span style="flex:1">'+v+'</span></label>').join('');
+    '<span style="flex:1">'+v+'</span>'+(k==='loja'?tagRegional(v):'')+'</label>').join('');
   return '<div style="position:relative;display:inline-block" class="bp-dd-wrap">'+
     '<button onclick="toggleBpDD(\''+k+'\')" style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--border);border-radius:3px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;min-width:160px;justify-content:space-between">'+
       '<span>'+titulo+'</span><span id="bpLbl_'+k+'" style="color:var(--muted);font-weight:400">'+_bpDDLabel(k)+'</span><span style="font-size:10px;color:var(--muted)">▼</span>'+
@@ -7662,7 +7706,7 @@ function _av2Dropdown(k,titulo){
   const opts=_av2All[k].map(v=>
     '<label class="av2-opt-'+k+'" data-txt="'+String(v).replace(/"/g,'&quot;')+'" style="display:flex;align-items:center;gap:10px;padding:7px 14px;cursor:pointer;border-bottom:1px solid #f5f4f0;font-size:11px" onmouseenter="this.style.background=\'#f5f4f0\'" onmouseleave="this.style.background=\'\'">'+
     '<input type="checkbox" class="av2-cb-'+k+'" data-v="'+String(v).replace(/"/g,'&quot;')+'" checked onchange="toggleAv2Item(\''+k+'\',\''+String(v).replace(/'/g,"\\'")+'\')">'+
-    '<span style="flex:1">'+v+'</span></label>').join('');
+    '<span style="flex:1">'+v+'</span>'+(k==='loja'?tagRegional(v):'')+'</label>').join('');
   return '<div style="position:relative;display:inline-block" class="av2-dd-wrap">'+
     '<button onclick="toggleAv2DD(\''+k+'\')" style="display:flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--border);border-radius:3px;padding:6px 10px;font-size:11px;font-weight:600;cursor:pointer;justify-content:space-between">'+
       '<span>'+titulo+'</span><span id="av2Lbl_'+k+'" style="color:var(--muted);font-weight:400">'+_av2DDLabel(k)+'</span><span style="font-size:9px;color:var(--muted)">▼</span>'+
