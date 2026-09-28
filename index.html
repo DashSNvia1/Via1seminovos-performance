@@ -7825,7 +7825,8 @@ function _av2PracaTable(rowsFiltrados){
     (window._av2PracaDrill[e]=window._av2PracaDrill[e]||[]).push({
       placa:r.placa||'—', modelo:r.modelo||'—', pct:(pct===null?0:pct),
       finalidade:r.finalidade||'—', classif:r.classif||'—', loja:r.loja||'—',
-      km:r.km||0, valorAval:r.valorAval, fipe:r.fipe||0
+      km:r.km||0, valorAval:r.valorAval, fipe:r.fipe||0,
+      data:r.data||''   // coluna E da base — vai para o Excel e para o drill na tela
     });
   });
 
@@ -7920,9 +7921,10 @@ function _av2DrillHtml(nome){
   const TH='background:#2a3a58;color:#fff;padding:6px 10px;font-size:10px;font-weight:700;text-transform:uppercase;cursor:pointer;white-space:nowrap;user-select:none';
   const TD='padding:5px 10px;font-size:11px;border-bottom:1px solid #e2e6ee;white-space:nowrap';
   const th=(rot,campo,al)=>'<th style="'+TH+';text-align:'+al+'" onclick="sortAv2Drill(\''+String(nome).replace(/'/g,"\\'")+'\',\''+campo+'\')">'+rot+arrow(campo)+'</th>';
-  let h='<div style="padding:8px 14px;overflow-x:auto"><table style="width:100%;min-width:1000px;border-collapse:collapse;background:#fff;border:1px solid #d5dae6"><thead><tr>'
+  let h='<div style="padding:8px 14px;overflow-x:auto"><table style="width:100%;min-width:1100px;border-collapse:collapse;background:#fff;border:1px solid #d5dae6"><thead><tr>'
     +th('Placa','placa','left')
     +th('Modelo','modelo','left')
+    +th('Data de Criação','data','left')
     +th('% Pago','pct','right')
     +th('Valor Aval.','valorAval','right')
     +th('FIPE','fipe','right')
@@ -7931,11 +7933,12 @@ function _av2DrillHtml(nome){
     +th('Classificação','classif','left')
     +th('Loja','loja','left')
     +'</tr></thead><tbody>';
-  if(!list.length){ h+='<tr><td colspan="9" style="'+TD+';color:var(--muted)">Nenhuma placa nesta praça.</td></tr>'; }
+  if(!list.length){ h+='<tr><td colspan="10" style="'+TD+';color:var(--muted)">Nenhuma placa nesta praça.</td></tr>'; }
   list.forEach((r,i)=>{
     h+='<tr style="background:'+(i%2===0?'#fff':'#f6f8fc')+'">'
       +'<td style="'+TD+';font-weight:700">'+r.placa+'</td>'
       +'<td style="'+TD+'">'+r.modelo+'</td>'
+      +'<td style="'+TD+'">'+_av2FmtData(r.data)+'</td>'
       +'<td style="'+TD+';text-align:right;font-weight:700;color:#1a7a4c">'+_av2Pct1(r.pct)+'</td>'
       +'<td style="'+TD+';text-align:right">'+(r.valorAval>0?_av2RS(r.valorAval):'—')+'</td>'
       +'<td style="'+TD+';text-align:right;color:var(--muted)">'+(r.fipe>0?_av2RS(r.fipe):'—')+'</td>'
@@ -8173,12 +8176,13 @@ function exportAv2Faixa(){
   const estados=Object.keys(drill);
   if(!estados.length){ alert('Sem placas para exportar. Abra a aba Avaliações e verifique os filtros.'); return; }
   const wb=XLSX.utils.book_new();
-  const headers=['Placa','Modelo','% Pago','Valor Aval.','FIPE','KM','Finalidade','Classificação','Loja','OBS'];
-  const fmt={2:'0.0%',3:'"R$" #,##0',4:'"R$" #,##0',5:'#,##0'};
-  const colStyle={2:{font:{color:{rgb:'C00000'},bold:true},alignment:{horizontal:'right'}}}; // % Pago vermelho negrito
+  const headers=['Placa','Modelo','Data de Criação','% Pago','Valor Aval.','FIPE','KM','Finalidade','Classificação','Loja','OBS'];
+  // índices deslocados em +1 por causa da coluna Data de Criação
+  const fmt={3:'0.0%',4:'"R$" #,##0',5:'"R$" #,##0',6:'#,##0'};
+  const colStyle={3:{font:{color:{rgb:'C00000'},bold:true},alignment:{horizontal:'right'}}}; // % Pago vermelho negrito
   _av2OrdenaEstados(estados).forEach(e=>{
     const list=(drill[e]||[]).slice().sort((a,b)=>(b.pct||0)-(a.pct||0));
-    const rows=list.map(r=>[r.placa||'—', r.modelo||'—', (r.pct||0), r.valorAval||0, r.fipe||0, r.km||0, r.finalidade||'—', r.classif||'—', r.loja||'—', '']);
+    const rows=list.map(r=>[r.placa||'—', r.modelo||'—', _av2FmtData(r.data), (r.pct||0), r.valorAval||0, r.fipe||0, r.km||0, r.finalidade||'—', r.classif||'—', r.loja||'—', '']);
     XLSX.utils.book_append_sheet(wb, _av2MakeSheet(headers, rows, {fmt:fmt, colStyle:colStyle}), _av2XlsSheetName(e));
   });
   const faixa=Math.round(_av2LimMin*100)+'-'+Math.round(_av2LimMax*100);
