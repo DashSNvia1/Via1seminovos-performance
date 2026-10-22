@@ -1204,11 +1204,16 @@ function mapVendasRows(rawRows, sheetName){
   }).filter(r=>r.familia&&r.vendas>0);
 }
 
-async function loadSheet(name) {
-  document.getElementById('loadingVendas').style.display='block';
-  document.getElementById('contentVendas').style.display='none';
-  document.getElementById('kpiStrip').style.display='none';
-  document.getElementById('tabNav').style.display='none';
+// silencioso = atualização em segundo plano (auto-refresh de 10 min):
+// não mostra o loader, não esconde a tabela, PRESERVA filtros, aba e rolagem.
+async function loadSheet(name, silencioso) {
+  const _snap = silencioso ? _vendaSnapshotFiltros() : null;
+  if(!silencioso){
+    document.getElementById('loadingVendas').style.display='block';
+    document.getElementById('contentVendas').style.display='none';
+    document.getElementById('kpiStrip').style.display='none';
+    document.getElementById('tabNav').style.display='none';
+  }
   try {
     const data = await jsonp(API_VENDAS, {sheet:name});
     if(data.error) throw new Error(data.error);
@@ -1254,7 +1259,13 @@ async function loadSheet(name) {
     document.getElementById('tabNav').style.display='flex';
     document.getElementById('contentVendas').style.display='block';
     document.getElementById('loadingVendas').style.display='none';
-    showTab('geral',false);
+    if(_snap && _snap.aba===name){
+      _vendaRestaurarFiltros(_snap);
+      // única pista visível de que os dados foram atualizados
+      const ag=new Date(), lu=document.getElementById('lastUpdate');
+      if(lu) lu.textContent='Atualizado: '+ag.toLocaleDateString('pt-BR')+' '+ag.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+    }
+    else { showTab('geral',false); }
     window._vendasSheetAtual = name; // guarda a aba atual p/ auto-refresh
     // Cruza com o estoque do mesmo mês (assíncrono; preenche a coluna "Em Estoque")
     // Isolado: se a API de estoque falhar, NÃO trava a aba Vendas.
@@ -1281,8 +1292,8 @@ function _agendarAutoRefreshVendas(){
       const chave=_jsonpKey(API_VENDAS,{sheet:name});
       if(window._jsonpCache) delete window._jsonpCache[chave];
     }catch(e){}
-    // recarrega (loadSheet re-renderiza a aba de vendas com dados frescos)
-    Promise.resolve(loadSheet(name)).catch(()=>{});
+    // atualização silenciosa: dados frescos sem perder filtros/aba/rolagem
+    Promise.resolve(loadSheet(name, true)).catch(()=>{});
   }, 10*60*1000); // 10 minutos
 }
 
@@ -2368,6 +2379,59 @@ function _updateVendaLojaLabel() {
   const sel = window._vendaSelectedLojas||new Set(all);
   const lbl = document.getElementById('vendaLojaLabel');
   if(lbl) lbl.textContent = sel.size===all.length ? 'Todas as lojas' : `${sel.size} selecionada${sel.size>1?'s':''}`;
+}
+
+// ── Preservar o estado da tela no auto-refresh ──────────────────────────────
+// O auto-refresh chama loadSheet de novo, e loadSheet reconstrói os filtros do
+// zero. Sem isto, a cada 10 min as seleções do usuário sumiam no meio da análise.
+function _vendaSnapshotFiltros(){
+  const ph=document.getElementById('hist-modelo-input');
+  return {
+    aba: window._vendasSheetAtual,
+    lojas:   window._vendaSelectedLojas ? new Set(window._vendaSelectedLojas) : null,
+    marcas:  window._vendaSelMarcas     ? new Set(window._vendaSelMarcas)     : null,
+    modelos: window._vendaSelModelos    ? new Set(window._vendaSelModelos)    : null,
+    modeloTodos: window._vendaModeloTodos,
+    faixas:  window._vendaSelFaixas     ? new Set(window._vendaSelFaixas)     : null,
+    tab:     (typeof _vendaTabAtiva==='function') ? _vendaTabAtiva() : 'geral',
+    busca:   ph ? ph.value : '',
+    scroll:  window.scrollY || 0
+  };
+}
+function _vendaRestaurarFiltros(sn){
+  if(!sn) return;
+  // Mantém só o que ainda existe na base nova (loja fechada, modelo sem venda no mês...)
+  const inter=(antigo,novo)=>{
+    if(!antigo) return null;
+    const s=new Set([...antigo].filter(x=>novo.indexOf(x)!==-1));
+    return s.size ? s : new Set(novo);
+  };
+  if(sn.lojas){
+    window._vendaSelectedLojas = inter(sn.lojas, window._vendaAllLojas||[]);
+    document.querySelectorAll('.venda-loja-cb').forEach(cb=>cb.checked=window._vendaSelectedLojas.has(cb.dataset.loja));
+    const la=document.getElementById('vendaLojaAll');
+    if(la) la.checked = window._vendaSelectedLojas.size===(window._vendaAllLojas||[]).length;
+  }
+  if(sn.marcas){
+    window._vendaSelMarcas = inter(sn.marcas, window._vendaAllMarcas||[]);
+    _vendaRenderMarcaItems();
+    const ma=document.getElementById('vendaMarcaAll');
+    if(ma) ma.checked = window._vendaSelMarcas.size===(window._vendaAllMarcas||[]).length;
+  }
+  if(sn.faixas){
+    window._vendaSelFaixas = new Set(sn.faixas);
+    _vendaRenderDiasItems();
+    const da=document.getElementById('vendaDiasAll');
+    if(da) da.checked = window._vendaSelFaixas.size===VENDA_FAIXAS.length;
+  }
+  // modelo: respeita "desmarcar todos" (não ressuscita a lista cheia)
+  window._vendaModeloTodos = sn.modeloTodos;
+  if(sn.modelos) window._vendaSelModelos = new Set(sn.modelos);
+  const ph=document.getElementById('hist-modelo-input');
+  if(ph && sn.busca) ph.value = sn.busca;
+  showTab(sn.tab||'geral', false);
+  _applyVendaFilters();
+  if(sn.scroll) window.scrollTo(0, sn.scroll);
 }
 
 // ─── FILTROS DA ABA VENDAS POR MODELO ────────────────────────────────────────
