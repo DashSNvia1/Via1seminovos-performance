@@ -453,6 +453,23 @@ th:hover .col-rh,.col-rh:hover,.col-rh.rh-drag{opacity:1;background:rgba(255,255
 
   </div>
   <div class="content" id="contentVendas" style="display:none">
+    <!-- HISTÓRICO POR MODELO (últimos 3 meses do mesmo canal) -->
+    <div id="hist-modelo-panel" style="background:#fff;border:1px solid var(--border);border-radius:3px;padding:14px 16px;margin-bottom:16px">
+      <div style="display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap">
+        <div style="flex:1;min-width:220px">
+          <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);display:block;margin-bottom:6px">📈 Histórico do Modelo — últimos 3 meses</label>
+          <input id="hist-modelo-input" list="hist-modelo-datalist" placeholder="Digite o modelo (ex: COMPASS) e tecle Enter"
+            onkeydown="if(event.key==='Enter'){event.preventDefault();buscarHistModelo();}"
+            style="width:100%;border:1px solid var(--border2);border-radius:3px;padding:7px 10px;font-size:12px;text-transform:uppercase">
+          <datalist id="hist-modelo-datalist"></datalist>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button onclick="buscarHistModelo()" style="background:#1e1e1e;color:#fff;border:none;padding:8px 16px;border-radius:3px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">📈 Ver histórico</button>
+          <button onclick="limparHistModelo()" style="background:#fff;color:var(--ink);border:1px solid var(--border);padding:8px 16px;border-radius:3px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">✕ Limpar</button>
+        </div>
+      </div>
+      <div id="hist-modelo-result" style="margin-top:12px"></div>
+    </div>
     <!-- BUSCA POR PLACAS -->
     <div id="placa-search-panel" style="background:#fff;border:1px solid var(--border);border-radius:3px;padding:14px 16px;margin-bottom:16px">
       <div style="display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap">
@@ -1163,6 +1180,30 @@ async function loadVendas() {
   }
 }
 
+// Converte as linhas cruas da API de Vendas no formato que o painel usa.
+// Extraída do loadSheet para poder ser reaproveitada pelo Histórico por Modelo.
+function mapVendasRows(rawRows, sheetName){
+  const repasse = String(sheetName||'').toUpperCase().includes('REPASSE');
+  return (rawRows||[]).map(r=>{
+    const loja=String(r['LOJA']||'').trim().toUpperCase();
+    return {
+      loja, familia:extractFamily(r['MODELO']||r[' ']||r['']||''),
+      // Coluna MARCA (C) da base de vendas. Fallbacks cobrem abas antigas sem a coluna.
+      marca:String(r['MARCA']||r['Marca']||r['marca']||'').trim().toUpperCase(),
+      vendas:toNum(r['( = ) Total']), margem:toNum(r['% Margem']),
+      pago:toNum(r['%PAGO']), fipe:toNum(r['% VENDA FIPE VENDA']||r['% VENDA FIPE']||r['%FIPE']||r['FIPE']),
+      tkm:toNum(r['TKM']),
+      modelo:String(r['MODELO']||r[' ']||r['']||'').trim(),
+      placa:String(r['PLACA']||'').trim(),
+      totalRecebido:toNum(r['Total Recebido']),
+      diasEstoque:_diasEstoque(r),
+      km:toNum(r['KM']), ano:r['ANO ']||r['ANO']||'',
+      margemRS:toNum(r['Margem R$']),
+      finalidade: repasse?'REPASSE':'SHOWROOM',
+    };
+  }).filter(r=>r.familia&&r.vendas>0);
+}
+
 async function loadSheet(name) {
   document.getElementById('loadingVendas').style.display='block';
   document.getElementById('contentVendas').style.display='none';
@@ -1171,25 +1212,7 @@ async function loadSheet(name) {
   try {
     const data = await jsonp(API_VENDAS, {sheet:name});
     if(data.error) throw new Error(data.error);
-    const rows = (data.rows||[]).map(r=>{
-      const loja=String(r['LOJA']||'').trim().toUpperCase();
-      const finalidade=name.toUpperCase().includes('REPASSE')?'REPASSE':'SHOWROOM';
-      return {
-        loja, familia:extractFamily(r['MODELO']||r[' ']||r['']||''),
-        // Coluna MARCA (C) da base de vendas. Fallbacks cobrem abas antigas sem a coluna.
-        marca:String(r['MARCA']||r['Marca']||r['marca']||'').trim().toUpperCase(),
-        vendas:toNum(r['( = ) Total']), margem:toNum(r['% Margem']),
-        pago:toNum(r['%PAGO']), fipe:toNum(r['% VENDA FIPE VENDA']||r['% VENDA FIPE']||r['%FIPE']||r['FIPE']),
-        tkm:toNum(r['TKM']),
-        modelo:String(r['MODELO']||r[' ']||r['']||'').trim(),
-        placa:String(r['PLACA']||'').trim(),
-        totalRecebido:toNum(r['Total Recebido']),
-        diasEstoque:_diasEstoque(r),
-        km:toNum(r['KM']), ano:r['ANO ']||r['ANO']||'',
-        margemRS:toNum(r['Margem R$']),
-        finalidade,
-      };
-    }).filter(r=>r.familia&&r.vendas>0);
+    const rows = mapVendasRows(data.rows, name);
 
     const baceRows=rows.filter(r=>BA_CE.includes(r.loja));
     const pepbRows=rows.filter(r=>PE_PB.includes(r.loja));
@@ -1216,6 +1239,7 @@ async function loadSheet(name) {
       }).join('');
     }
     _vendaInitFiltros(base);   // Marca / Modelo / Dias em Estoque
+    _histAtualizaDatalist();   // autocomplete do Histórico por Modelo
 
     // Guess month/year
     const mu=name.toUpperCase();
@@ -2565,6 +2589,181 @@ function filterVendasByLoja(loja) {
   rawRows.geral=geralF; rawRows.bace=baceF; rawRows.pepb=pepbF;
   renderVendasTable('geral'); renderVendasTable('bace'); renderVendasTable('pepb');
   renderKPIs(document.querySelector('.tab-btn.active')?.getAttribute('onclick')?.match(/'(\w+)'/)?.[1]||'geral');
+}
+
+// ── HISTÓRICO POR MODELO (últimos 3 meses do mesmo canal) ────────────────────
+// Independente do filtro de Modelo/Marca/Dias da barra — é uma consulta própria.
+// RESPEITA o filtro de Operação, porque a pergunta "como esse modelo anda" quase
+// sempre é feita olhando um conjunto específico de lojas.
+// Canal (Showroom/Repasse) e janela de 3 meses saem da aba selecionada.
+
+// "OUTUBRO SHOWROOM 26" -> {chave: ano*12+mes, canal:'SHOWROOM'}
+function _histChaveAba(nome){
+  const u = String(nome||'').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  let m = -1;
+  for(let i=1;i<MONTHS.length;i++){
+    const mn = MONTHS[i].toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+    if(u.indexOf(mn)>=0){ m = i-1; break; }
+  }
+  const a = u.match(/(\d{2,4})\s*$/) || u.match(/\b(\d{2,4})\b/);
+  if(m<0 || !a) return null;
+  let ano = parseInt(a[1],10); if(ano<100) ano += 2000;
+  return { chave: ano*12+m, canal: u.indexOf('REPASSE')>=0 ? 'REPASSE' : 'SHOWROOM' };
+}
+function _histRotuloMes(chave){
+  const ano=Math.floor(chave/12), m=chave%12;
+  return ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][m]+'/'+String(ano).slice(2);
+}
+// As 3 abas: a atual + as 2 anteriores do MESMO canal
+function _histAbasDoTri(){
+  const sel=document.getElementById('sheetSelect');
+  const atual=window._vendasSheetAtual || (sel&&sel.value);
+  if(!sel||!atual) return [];
+  const ref=_histChaveAba(atual);
+  if(!ref) return [{nome:atual, chave:0, rotulo:atual}];
+  return Array.from(sel.options).map(o=>({nome:o.value, info:_histChaveAba(o.value)}))
+    .filter(x=>x.info && x.info.canal===ref.canal && x.info.chave<=ref.chave)
+    .sort((a,b)=>b.info.chave-a.info.chave)
+    .slice(0,3)
+    .map(x=>({nome:x.nome, chave:x.info.chave, rotulo:_histRotuloMes(x.info.chave)}));
+}
+// Preenche o autocomplete com as famílias da aba atual
+function _histAtualizaDatalist(){
+  const dl=document.getElementById('hist-modelo-datalist');
+  const all=window._allVendaRows;
+  if(!dl||!all) return;
+  const fams=[...new Set(all.geral.map(r=>r.familia).filter(Boolean))].sort();
+  dl.innerHTML=fams.map(f=>'<option value="'+String(f).replace(/"/g,'&quot;')+'">').join('');
+}
+function limparHistModelo(){
+  const i=document.getElementById('hist-modelo-input'); if(i) i.value='';
+  const r=document.getElementById('hist-modelo-result'); if(r) r.innerHTML='';
+}
+function _histNorm(t){ return String(t||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().trim(); }
+
+async function buscarHistModelo(){
+  const inp=document.getElementById('hist-modelo-result');
+  const termo=_histNorm((document.getElementById('hist-modelo-input')||{}).value);
+  if(!inp) return;
+  if(!termo){ inp.innerHTML='<div style="font-size:12px;color:var(--muted)">Digite um modelo.</div>'; return; }
+  const all=window._allVendaRows;
+  if(!all){ inp.innerHTML='<div style="font-size:12px;color:var(--red)">Carregue a base de vendas primeiro.</div>'; return; }
+
+  // famílias que casam com o termo (exata primeiro; senão, por conteúdo)
+  const fams=[...new Set(all.geral.map(r=>r.familia).filter(Boolean))];
+  let alvo=fams.filter(f=>_histNorm(f)===termo);
+  if(!alvo.length) alvo=fams.filter(f=>_histNorm(f).indexOf(termo)>=0);
+  if(!alvo.length){ inp.innerHTML='<div style="font-size:12px;color:var(--red)">Nenhum modelo encontrado para "'+termo+'" na aba atual.</div>'; return; }
+  alvo=alvo.sort().slice(0,5);
+
+  const abas=_histAbasDoTri();
+  if(!abas.length){ inp.innerHTML='<div style="font-size:12px;color:var(--red)">Não consegui identificar as abas do período.</div>'; return; }
+
+  inp.innerHTML='<div style="padding:1rem;color:var(--muted);font-size:12px"><div class="spin2" style="margin:0 auto 8px"></div>Carregando '+abas.length+' mês(es)...</div>';
+
+  // carrega as abas (jsonp já tem cache de 8s + dedup)
+  const porMes={};
+  const falhas=[];
+  for(const a of abas){
+    try{
+      const d=await jsonp(API_VENDAS,{sheet:a.nome});
+      porMes[a.nome]= d.error ? [] : mapVendasRows(d.rows, a.nome);
+      if(d.error) falhas.push(a.nome);
+    }catch(e){ porMes[a.nome]=[]; falhas.push(a.nome); }
+  }
+
+  const selLojas=window._vendaSelectedLojas;
+  const lojaOk=r=> !selLojas || selLojas.size===0 || selLojas.has(r.loja);
+  const nLojas=(selLojas&&selLojas.size)||0;
+  const totLojas=(window._vendaAllLojas||[]).length;
+  const escopo=(nLojas===0||nLojas===totLojas)?'Todas as lojas':(nLojas+' loja'+(nLojas>1?'s':'')+' selecionada'+(nLojas>1?'s':''));
+
+  const fmtN=v=>Math.round(v||0).toLocaleString('pt-BR');
+  const fmtP=v=>((v||0)*100).toFixed(2)+'%';
+  const fmtP1=v=>((v||0)*100).toFixed(1)+'%';
+  const pCol=v=>v>=0.07?'var(--green)':v>=0.04?'var(--amber)':'var(--red)';
+
+  function agrega(rows){
+    const vol=rows.reduce((s,r)=>s+(r.vendas||0),0);
+    const rec=rows.reduce((s,r)=>s+(r.totalRecebido||0),0);
+    const mrg=rows.reduce((s,r)=>s+(r.margemRS||0),0);
+    const comTkm=rows.filter(r=>r.tkm>0);
+    const n=rows.length||1;
+    return {
+      vol, rec, mrg,
+      tkm: comTkm.length? comTkm.reduce((s,r)=>s+r.tkm,0)/comTkm.length : 0,
+      margem: rec? mrg/rec : 0,                               // ponderada
+      pago: rows.reduce((s,r)=>s+(r.pago||0),0)/n,
+      fipe: rows.reduce((s,r)=>s+(r.fipe||0),0)/n,
+      dias: rows.reduce((s,r)=>s+(r.diasEstoque||0),0)/n,
+      mrgUn: mrg/n
+    };
+  }
+
+  const TH='background:#2a2a2a;color:#fff;padding:7px 10px;font-size:10px;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;text-align:';
+  const TD='padding:7px 10px;white-space:nowrap;border-bottom:1px solid var(--border);text-align:';
+  let html='';
+
+  alvo.forEach(fam=>{
+    const linhas=abas.slice().sort((a,b)=>a.chave-b.chave).map(a=>{
+      const rows=(porMes[a.nome]||[]).filter(r=>r.familia===fam && lojaOk(r));
+      return {rotulo:a.rotulo, aba:a.nome, n:rows.length, ag:agrega(rows)};
+    });
+    const todas=[].concat(...abas.map(a=>(porMes[a.nome]||[]).filter(r=>r.familia===fam && lojaOk(r))));
+    const tri=agrega(todas);
+    const prim=linhas[0]&&linhas[0].ag, ult=linhas[linhas.length-1]&&linhas[linhas.length-1].ag;
+    const dVol=(prim&&ult)?ult.vol-prim.vol:0;
+    const dMrg=(prim&&ult)?ult.margem-prim.margem:0;
+
+    html+='<div style="margin-bottom:16px;border:1px solid var(--border);border-radius:3px;overflow:hidden">'
+      +'<div style="background:#111;color:#fff;padding:8px 14px;font-size:12px;font-weight:700;display:flex;gap:12px;align-items:center;flex-wrap:wrap">'
+        +'<span>'+fam+'</span>'
+        +'<span style="font-weight:400;font-size:10px;opacity:.75">'+abas.map(a=>a.rotulo).reverse().join(' · ')+' · '+(_histChaveAba(window._vendasSheetAtual||'')||{canal:''}).canal+' · '+escopo+'</span>'
+      +'</div>'
+      +'<div class="tbl-wrap" style="border:none"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr>'
+        +'<th style="'+TH+'left">Mês</th>'
+        +'<th style="'+TH+'right">Volume</th>'
+        +'<th style="'+TH+'right">TKM Médio</th>'
+        +'<th style="'+TH+'center">% Venda FIPE</th>'
+        +'<th style="'+TH+'center">% Pago</th>'
+        +'<th style="'+TH+'center">% Margem</th>'
+        +'<th style="'+TH+'right">Margem R$/un.</th>'
+        +'<th style="'+TH+'right">Média Dias</th>'
+      +'</tr></thead><tbody>';
+    linhas.forEach((l,i)=>{
+      const a=l.ag;
+      html+='<tr style="background:'+(i%2===0?'#fafaf8':'#fff')+'">'
+        +'<td style="'+TD+'left;font-weight:600">'+l.rotulo+'</td>'
+        +'<td style="'+TD+'right;font-weight:700">'+(a.vol||0)+'</td>'
+        +'<td style="'+TD+'right">'+(a.tkm>0?'R$ '+fmtN(a.tkm):'—')+'</td>'
+        +'<td style="'+TD+'center">'+(a.vol?fmtP1(a.fipe):'—')+'</td>'
+        +'<td style="'+TD+'center">'+(a.vol?fmtP1(a.pago):'—')+'</td>'
+        +'<td style="'+TD+'center;font-weight:700;color:'+pCol(a.margem)+'">'+(a.vol?fmtP(a.margem):'—')+'</td>'
+        +'<td style="'+TD+'right">'+(a.vol?'R$ '+fmtN(a.mrgUn):'—')+'</td>'
+        +'<td style="'+TD+'right">'+(a.vol?Math.round(a.dias)+' dias':'—')+'</td>'
+        +'</tr>';
+    });
+    html+='<tr style="background:#111;color:#fff;font-weight:700">'
+      +'<td style="'+TD+'left;color:#fff;border:none">Trimestre</td>'
+      +'<td style="'+TD+'right;color:#fff;border:none">'+(tri.vol||0)+'</td>'
+      +'<td style="'+TD+'right;color:#fff;border:none">'+(tri.tkm>0?'R$ '+fmtN(tri.tkm):'—')+'</td>'
+      +'<td style="'+TD+'center;color:#fff;border:none">'+(tri.vol?fmtP1(tri.fipe):'—')+'</td>'
+      +'<td style="'+TD+'center;color:#fff;border:none">'+(tri.vol?fmtP1(tri.pago):'—')+'</td>'
+      +'<td style="'+TD+'center;border:none;color:'+pCol(tri.margem)+'">'+(tri.vol?fmtP(tri.margem):'—')+'</td>'
+      +'<td style="'+TD+'right;color:#fff;border:none">'+(tri.vol?'R$ '+fmtN(tri.mrgUn):'—')+'</td>'
+      +'<td style="'+TD+'right;color:#fff;border:none">'+(tri.vol?Math.round(tri.dias)+' dias':'—')+'</td>'
+      +'</tr></tbody></table></div>';
+    if(linhas.length>1 && prim && ult && prim.vol && ult.vol){
+      html+='<div style="padding:7px 14px;font-size:11px;color:var(--muted);background:#f5f4f0">'
+        +'Do 1º ao último mês: volume '+(dVol>=0?'+':'')+dVol+' un. · % margem '+(dMrg>=0?'+':'')
+        +(dMrg*100).toFixed(2)+' p.p.</div>';
+    }
+    html+='</div>';
+  });
+
+  if(falhas.length) html+='<div style="font-size:11px;color:var(--amber)">Não consegui ler: '+falhas.join(', ')+'</div>';
+  if(alvo.length>1) html='<div style="font-size:11px;color:var(--muted);margin-bottom:8px">'+alvo.length+' modelos casaram com "'+termo+'".</div>'+html;
+  inp.innerHTML=html;
 }
 
 // ── BUSCA POR PLACAS ──────────────────────────────────────────────────────────
