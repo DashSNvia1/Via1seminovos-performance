@@ -2388,11 +2388,13 @@ function _vendaModelosDisponiveis(){
 function _vendaSyncModelos(){
   const disp = _vendaModelosDisponiveis();
   window._vendaAllModelos = disp;
-  if(window._vendaModeloTodos !== false){
+  if(window._vendaModeloTodos === true){
     window._vendaSelModelos = new Set(disp);
   } else {
-    const inter = new Set([...(window._vendaSelModelos||[])].filter(m=>disp.indexOf(m)!==-1));
-    window._vendaSelModelos = inter.size ? inter : new Set(disp);
+    // Mantém só o que ainda existe na lista disponível.
+    // NÃO "ressuscita" para a lista cheia quando fica vazio: desmarcar
+    // "Todos os modelos" tem de deixar tudo desmarcado mesmo.
+    window._vendaSelModelos = new Set([...(window._vendaSelModelos||[])].filter(m=>disp.indexOf(m)!==-1));
   }
   _vendaRenderModeloItems();
 }
@@ -2414,6 +2416,8 @@ function _vendaRenderModeloItems(){
     +'<span style="flex:1">'+m+'</span></label>').join('');
   const busca=document.getElementById('vendaModeloBusca');
   if(busca && busca.value) filterVendaModeloDD(busca.value);
+  const allCb=document.getElementById('vendaModeloAll');
+  if(allCb) allCb.checked = (window._vendaAllModelos||[]).length>0 && sel.size===(window._vendaAllModelos||[]).length;
 }
 function _vendaRenderDiasItems(){
   const box=document.getElementById('vendaDiasItems'); if(!box) return;
