@@ -579,6 +579,21 @@ th:hover .col-rh,.col-rh:hover,.col-rh.rh-drag{opacity:1;background:rgba(255,255
   <div id="tempo-estoque-body" style="display:none"></div>
 </div>
 
+<!-- ESTOQUE X PAGO PAGE -->
+<div id="pageEstPago" style="display:none">
+  <div style="background:#fff;border-bottom:1px solid var(--border);padding:6px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+    <div><div class="filter-label">Aba de Estoque</div>
+      <select class="sheet-select" id="estPagoSheetSelect" onchange="loadEstPago()" style="min-width:200px"></select></div>
+    <div><div class="filter-label">Cruzar avaliações dos últimos</div>
+      <select class="sheet-select" id="estPagoMeses" onchange="loadEstPago()" style="min-width:120px">
+        <option value="3">3 meses</option><option value="6" selected>6 meses</option><option value="12">12 meses</option>
+      </select></div>
+  </div>
+  <div style="padding:16px 20px 60px" id="est-pago-body">
+    <div style="padding:2rem;color:var(--muted)">Carregando...</div>
+  </div>
+</div>
+
 <!-- AGING ESTOQUE PAGE -->
 <div id="pageAgingEstoque" style="display:none">
   <div style="background:#fff;border-bottom:1px solid var(--border);padding:6px 20px;display:flex;align-items:center;gap:8px">
@@ -694,6 +709,7 @@ th:hover .col-rh,.col-rh:hover,.col-rh.rh-drag{opacity:1;background:rgba(255,255
   <div class="ptab" id="ptCritico" data-page="critico" draggable="true">Estoque Antigo</div>
   <div class="ptab" id="ptAval" data-page="aval" draggable="true">Tempo de Avaliação</div>
   <div class="ptab" id="ptEstoque" data-page="estoque" draggable="true">Estoque</div>
+  <div class="ptab" id="ptEstPago" data-page="est-pago" draggable="true">Estoque X Pago</div>
   <div class="ptab" id="ptAgingEstoque" data-page="aging-estoque" draggable="true">Aging Estoque</div>
   <div class="ptab" id="ptAgingOficina" data-page="aging-oficina" draggable="true">Aging Oficina</div>
   <div class="ptab" id="ptOficina" data-page="oficina" draggable="true">Oficina</div>
@@ -1005,6 +1021,7 @@ function switchPage(page) {
   document.getElementById('pageGiro').style.display    = page==='giro'?'block':'none';
   document.getElementById('pageCritico').style.display = page==='critico'?'block':'none';
   const _pe=document.getElementById('pageEstoque');if(_pe)_pe.style.display=page==='estoque'?'block':'none';
+  const _pep=document.getElementById('pageEstPago');if(_pep)_pep.style.display=page==='est-pago'?'block':'none';
   const _pts=document.getElementById('pageTempoEstoque');if(_pts)_pts.style.display=page==='tempo-estoque'?'block':'none';
   const _pae=document.getElementById('pageAgingEstoque');if(_pae)_pae.style.display=page==='aging-estoque'?'block':'none';
   const _pao=document.getElementById('pageAgingOficina');if(_pao)_pao.style.display=page==='aging-oficina'?'block':'none';
@@ -1021,6 +1038,7 @@ function switchPage(page) {
   document.getElementById('ptGiro').classList.toggle('active', page==='giro');
   document.getElementById('ptCritico').classList.toggle('active', page==='critico');
   const _pte=document.getElementById('ptEstoque');if(_pte)_pte.classList.toggle('active',page==='estoque');
+  const _ptep=document.getElementById('ptEstPago');if(_ptep)_ptep.classList.toggle('active',page==='est-pago');
   const _ptte=document.getElementById('ptTempoEstoque');if(_ptte)_ptte.classList.toggle('active',page==='tempo-estoque');
   const _ptae=document.getElementById('ptAgingEstoque');if(_ptae)_ptae.classList.toggle('active',page==='aging-estoque');
   const _ptao=document.getElementById('ptAgingOficina');if(_ptao)_ptao.classList.toggle('active',page==='aging-oficina');
@@ -1049,6 +1067,7 @@ function switchPage(page) {
   const cb=document.getElementById('critico-tab-bace');if(cb)cb.style.display='none';
   const cp=document.getElementById('critico-tab-pepb');if(cp)cp.style.display='none';
   if(page==='estoque') initEstoquePage();
+  if(page==='est-pago') initEstPagoPage();
   if(page==='tempo-estoque') initTempoEstoquePage();
 }
 
@@ -5643,6 +5662,340 @@ function toggleEsqRow(id) {
   if(icon) icon.textContent = open ? '⊟' : '⊞';
 }
 // ─────────────────────────────────────────────────────────────────────────────
+
+// ── ESTOQUE X PAGO ───────────────────────────────────────────────────────────
+// Cruza o estoque atual com a base de Avaliações pela PLACA.
+//   Estoque    -> modelo, loja, tipo, dias e VALOR COMPRA (o que de fato foi pago)
+//   Avaliação  -> FIPE, valor avaliado, avaliador, data
+// Responde: quanto paguei no que está parado, quanto isso é da FIPE, e se a
+// compra saiu acima do que foi avaliado.
+let _epRows=[], _epMeta={}, _epAllLojas=[], _epSelLojas=new Set(), _epAllTipos=[], _epSelTipos=new Set();
+const _epSort={col:'pago',dir:'desc'};
+
+function _epPlaca(p){ return String(p||'').toUpperCase().replace(/[^A-Z0-9]/g,''); }
+function _epRS(v){ return 'R$ '+Math.round(v||0).toLocaleString('pt-BR'); }
+function _epPct(v){ return ((v||0)*100).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+'%'; }
+
+// Acha uma coluna pelo NOME (tolerante); só cai no índice fixo se o nome não existir.
+function _epColuna(headers, testes, fallbackIdx, fallbackNome){
+  const norm=h=>String(h||'').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,'');
+  for(const t of testes){ const h=headers.find(x=>norm(x)===t); if(h) return h; }
+  for(const t of testes){ const h=headers.find(x=>norm(x).indexOf(t)>=0); if(h) return h; }
+  return headers[fallbackIdx] || fallbackNome;
+}
+
+// "Outubro 2026" / "Oficina Outubro" -> {m, ano|null}
+function _epMesAno(nome){
+  const u=String(nome||'').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  let m=-1;
+  for(let i=1;i<MONTHS.length;i++){
+    const mn=MONTHS[i].toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+    if(u.indexOf(mn)>=0){ m=i-1; break; }
+  }
+  if(m<0) return null;
+  const a=u.match(/\b(\d{4}|\d{2})\b/);
+  let ano=a?parseInt(a[1],10):null; if(ano!==null && ano<100) ano+=2000;
+  return {m, ano};
+}
+
+function initEstPagoPage(){
+  const body=document.getElementById('est-pago-body');
+  if(!API_ESTOQUE || !API_AVAL2){
+    body.innerHTML='<div style="padding:2rem;color:var(--muted)">Esta aba precisa das APIs de <b>Estoque</b> e <b>Avaliações</b> configuradas em ⚙.</div>';
+    return;
+  }
+  const sel=document.getElementById('estPagoSheetSelect');
+  if(sel.options.length>0){ if(!_epRows.length) loadEstPago(); return; }
+  sel.innerHTML='<option>Carregando abas...</option>';
+  jsonp(API_ESTOQUE,{sheet:'__sheets__'}).then(d=>{
+    const sheets=d.sheets||[];
+    sel.innerHTML=sheets.map(x=>'<option value="'+x+'">'+x+'</option>').join('');
+    if(sheets.length){ sel.value=sheets[sheets.length-1]; loadEstPago(); }
+  }).catch(()=>{ sel.innerHTML='<option>Erro ao carregar abas</option>'; });
+}
+
+// Índice placa -> avaliação mais recente, lendo as N abas mensais mais recentes
+async function _epIndiceAvaliacoes(meses){
+  const sd=await jsonp(API_AVAL2,{sheet:'__sheets__'});
+  let abas=(sd.sheets||[]).map(n=>({n, d:_epMesAno(n)})).filter(x=>x.d);
+  if(!abas.length) return {idx:{}, lidas:[], falhas:[]};
+  // abas sem ano (ex.: "Oficina Outubro"): herda o ano da aba datada mais recente,
+  // recuando um ano se o mês cairia no futuro
+  const datadas=abas.filter(x=>x.d.ano!==null);
+  const refKey=datadas.length ? Math.max(...datadas.map(x=>x.d.ano*12+x.d.m)) : null;
+  const refAno=refKey!==null ? Math.floor(refKey/12) : new Date().getFullYear();
+  abas.forEach(x=>{
+    let ano=x.d.ano;
+    if(ano===null){ ano=refAno; if(refKey!==null && ano*12+x.d.m>refKey) ano--; }
+    x.key=ano*12+x.d.m;
+  });
+  const maxKey=Math.max(...abas.map(x=>x.key));
+  const alvo=abas.filter(x=>x.key>maxKey-meses).sort((a,b)=>b.key-a.key);
+
+  const idx={}, lidas=[], falhas=[];
+  for(const a of alvo){
+    try{
+      const d=await jsonp(API_AVAL2,{sheet:a.n});
+      if(d.error){ falhas.push(a.n); continue; }
+      lidas.push(a.n);
+      (d.rows||[]).forEach(r=>{
+        const pl=_epPlaca(r['Placa']); if(!pl) return;
+        const st=String(r['Status']||'').toUpperCase();
+        if(st.indexOf('DESATIV')>=0) return;                 // avaliação desativada não vale
+        const valorAval=+r['ValorAval']||0;
+        if(valorAval<1000 || valorAval>2000000) return;      // mesma régua da aba Avaliações
+        const reg={
+          valorAval, fipe:+r['FIPE']||0,
+          data:String(r['DataCriacao']||'').trim(),
+          avaliador:String(r['Avaliador']||'').trim().toUpperCase(),
+          finalidade:String(r['Finalidade']||'').trim().toUpperCase(),
+          aba:a.n
+        };
+        // fica a MAIS RECENTE por placa (mesmo critério da aba Avaliações)
+        if(!idx[pl] || reg.data>idx[pl].data) idx[pl]=reg;
+      });
+    }catch(e){ falhas.push(a.n); }
+  }
+  return {idx, lidas, falhas};
+}
+
+// Cache de 10 min do índice placa->avaliação: trocar a aba de estoque não
+// precisa reler todas as abas de avaliação.
+window._avIdxCache = window._avIdxCache || {};
+async function _avIndiceCacheado(meses){
+  const c=window._avIdxCache[meses];
+  if(c && (Date.now()-c.ts) < 10*60*1000) return c.data;
+  const data=await _epIndiceAvaliacoes(meses);
+  window._avIdxCache[meses]={ts:Date.now(), data};
+  return data;
+}
+
+async function loadEstPago(){
+  const body=document.getElementById('est-pago-body');
+  const aba=document.getElementById('estPagoSheetSelect').value;
+  const meses=parseInt(document.getElementById('estPagoMeses').value,10)||6;
+  if(!aba) return;
+  body.innerHTML='<div style="padding:2rem;text-align:center;color:var(--muted)"><div class="spin2" style="margin:0 auto 8px"></div>Lendo estoque e '+meses+' meses de avaliações...</div>';
+  try{
+    const [est, av]=await Promise.all([ jsonp(API_ESTOQUE,{sheet:aba}), _avIndiceCacheado(meses) ]);
+    if(est.error) throw new Error(est.error);
+    const H=est.headers||[];
+    const cTipo=est.estoqueCol || _epColuna(H,['ESTOQUE'],31,'ESTOQUE');
+    const cVC  =_epColuna(H,['VALORCOMPRA'],10,'Valor Compra');
+    const cDias=_epColuna(H,['DIASESTOQUE','DIASEMESTOQUE'],20,'DiasEstoque');
+
+    _epRows=(est.rows||[]).map(r=>{
+      const placa=String(r['PLACA']||r['Placa']||'').trim().toUpperCase();
+      const a=av.idx[_epPlaca(placa)]||null;
+      const modeloFull=String(r['MODELO']||r['Modelo']||'').trim();
+      return {
+        placa, modeloFull, familia:extractFamily(modeloFull),
+        loja:String(r['EMPRESA']||r['Empresa']||r['LOJA']||'').trim().toUpperCase(),
+        tipo:String(r[cTipo]||'').trim(),
+        dias:toNum(r[cDias]||0),
+        pago:toNum(r[cVC]||0),
+        aval:a
+      };
+    }).filter(r=>r.familia && r.loja.indexOf('NEWVIA')<0);
+
+    _epMeta={aba, meses, lidas:av.lidas, falhas:av.falhas, cVC, cDias};
+    _epAllLojas=[...new Set(_epRows.map(r=>r.loja).filter(Boolean))].sort();
+    _epSelLojas=new Set(_epAllLojas);
+    _epAllTipos=[...new Set(_epRows.map(r=>r.tipo).filter(Boolean))].sort();
+    // padrão: Showroom + Repasse (mesmo critério da aba Estoque)
+    const def=_epAllTipos.filter(t=>finalidadeEstoque(t)!=='OUTRO');
+    _epSelTipos=new Set(def.length?def:_epAllTipos);
+    renderEstPagoShell();
+  }catch(e){
+    body.innerHTML='<div style="padding:2rem;color:var(--red)">Erro: '+e.message+'</div>';
+  }
+}
+
+function _epFiltrados(){ return _epRows.filter(r=>_epSelLojas.has(r.loja) && _epSelTipos.has(r.tipo)); }
+
+function toggleEpDD(id){
+  ['epLojaDD','epTipoDD'].forEach(x=>{ const d=document.getElementById(x); if(d) d.style.display=(x===id&&d.style.display==='none')?'block':'none'; });
+}
+function toggleEpItem(tipo,val){
+  const S = tipo==='loja' ? _epSelLojas : _epSelTipos;
+  if(S.has(val)) S.delete(val); else S.add(val);
+  _epAtualizaLabels(); renderEstPagoContent();
+}
+function toggleEpAll(tipo,ck){
+  const all = tipo==='loja' ? _epAllLojas : _epAllTipos;
+  if(tipo==='loja') _epSelLojas=new Set(ck?all:[]); else _epSelTipos=new Set(ck?all:[]);
+  document.querySelectorAll('.ep-cb-'+tipo).forEach(cb=>cb.checked=ck);
+  _epAtualizaLabels(); renderEstPagoContent();
+}
+function _epAtualizaLabels(){
+  const l=document.getElementById('epLojaLbl'), t=document.getElementById('epTipoLbl');
+  if(l) l.textContent=_epSelLojas.size===_epAllLojas.length?'Todas':_epSelLojas.size+' selec.';
+  if(t) t.textContent=_epSelTipos.size===_epAllTipos.length?'Todos':_epSelTipos.size+' selec.';
+}
+function sortEstPago(col){
+  _epSort.dir = (_epSort.col===col && _epSort.dir==='desc') ? 'asc' : 'desc';
+  _epSort.col = col; renderEstPagoContent();
+}
+
+function renderEstPagoShell(){
+  const body=document.getElementById('est-pago-body');
+  if(!_epRows.length){ body.innerHTML='<div style="padding:2rem;color:var(--muted)">Sem estoque nesta aba.</div>'; return; }
+  const BTN='display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--border);border-radius:3px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;min-width:200px;justify-content:space-between';
+  const DD='display:none;position:absolute;top:100%;left:0;z-index:999;background:#fff;border:1px solid var(--border);border-radius:3px;box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:300px;max-height:320px;overflow-y:auto;margin-top:2px';
+  const item=(tipo,v,tag)=>'<label style="display:flex;align-items:center;gap:10px;padding:8px 14px;cursor:pointer;border-bottom:1px solid #f5f4f0;font-size:11px" onmouseenter="this.style.background=\'#f5f4f0\'" onmouseleave="this.style.background=\'\'">'
+    +'<input type="checkbox" class="ep-cb-'+tipo+'" '+((tipo==='loja'?_epSelLojas:_epSelTipos).has(v)?'checked':'')+' onchange="toggleEpItem(\''+tipo+'\',\''+String(v).replace(/'/g,"\\'")+'\')">'
+    +'<span style="flex:1">'+v+'</span>'+tag+'</label>';
+  const dd=(tipo,tit,lblId,ddId,itens)=>'<div class="ep-dd-wrap" style="position:relative;display:inline-block">'
+    +'<button onclick="toggleEpDD(\''+ddId+'\')" style="'+BTN+'"><span>'+tit+'</span><span id="'+lblId+'" style="color:var(--muted);font-weight:400"></span><span style="font-size:10px;color:var(--muted)">▼</span></button>'
+    +'<div id="'+ddId+'" style="'+DD+'">'
+      +'<label style="display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;border-bottom:1px solid #e0dfd8;font-size:12px;font-weight:600">'
+      +'<input type="checkbox" '+(tipo==='loja'?'checked':'')+' onchange="toggleEpAll(\''+tipo+'\',this.checked)"><span>'+(tipo==='loja'?'Todas as lojas':'Todos os estoques')+'</span></label>'
+      +itens+'</div></div>';
+
+  body.innerHTML='<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">'
+      +dd('tipo','Estoque','epTipoLbl','epTipoDD',_epAllTipos.map(t=>item('tipo',t,tagFinalidade(t))).join(''))
+      +dd('loja','Por Loja','epLojaLbl','epLojaDD',_epAllLojas.map(l=>item('loja',l,tagRegional(l))).join(''))
+    +'</div>'
+    +'<div id="ep-kpis" style="display:flex;gap:12px;margin-bottom:18px;flex-wrap:wrap"></div>'
+    +'<div id="ep-tabela"></div>'
+    +'<div id="ep-rodape" style="font-size:10px;color:var(--muted);margin-top:8px"></div>';
+  setTimeout(()=>{ document.addEventListener('click',function(e){ if(e.target.closest&&e.target.closest('.ep-dd-wrap')) return; toggleEpDD(''); }); },100);
+  _epAtualizaLabels();
+  renderEstPagoContent();
+}
+
+function _epAgrega(rows){
+  const comAv=rows.filter(r=>r.aval && r.aval.fipe>0 && r.pago>0);
+  const somaPago=rows.reduce((s,r)=>s+r.pago,0);
+  const pagoMatch=comAv.reduce((s,r)=>s+r.pago,0);
+  const fipeMatch=comAv.reduce((s,r)=>s+r.aval.fipe,0);
+  const avalMatch=comAv.reduce((s,r)=>s+r.aval.valorAval,0);
+  return {
+    qtd:rows.length, pago:somaPago,
+    ticket: rows.length? somaPago/rows.length : 0,
+    match: rows.filter(r=>r.aval).length,
+    // % PAGO s/ FIPE = valor AVALIADO ÷ FIPE, média por placa — mesma definição
+    // da aba Avaliações, para os números baterem entre as duas telas.
+    pctAval: (()=>{ const ps=rows.filter(r=>r.aval&&r.aval.fipe>0).map(r=>r.aval.valorAval/r.aval.fipe).filter(p=>p<=3);
+                    return ps.length? ps.reduce((a,b)=>a+b,0)/ps.length : 0; })(),
+    // % COMPRA s/ FIPE = VALOR COMPRA do estoque ÷ FIPE da avaliação (ponderado)
+    pctFipe: fipeMatch? pagoMatch/fipeMatch : 0,
+    delta: pagoMatch-avalMatch,                           // compra − avaliado (só nas que casaram)
+    dias: rows.length? rows.reduce((s,r)=>s+r.dias,0)/rows.length : 0
+  };
+}
+
+function renderEstPagoContent(){
+  const rows=_epFiltrados();
+  const kpiBox=document.getElementById('ep-kpis'), tab=document.getElementById('ep-tabela'), rod=document.getElementById('ep-rodape');
+  if(!tab) return;
+  if(!rows.length){ kpiBox.innerHTML=''; tab.innerHTML='<div style="padding:1rem;color:var(--muted)">Nada para os filtros selecionados.</div>'; rod.innerHTML=''; return; }
+
+  const G=_epAgrega(rows);
+  const pctMatch=G.qtd? G.match/G.qtd : 0;
+  const k=(l,v,c,sub,tt)=>'<div style="background:#fff;border:1px solid var(--border);border-left:3px solid '+c+';border-radius:3px;padding:.65rem 1.2rem;min-width:150px"'+(tt?' title="'+tt+'"':'')+'>'
+    +'<p style="font-size:10px;color:var(--muted);margin:0 0 2px;text-transform:uppercase;letter-spacing:.5px;font-weight:600">'+l+'</p>'
+    +'<p style="font-size:20px;font-weight:700;margin:0">'+v+'</p>'+(sub?'<p style="font-size:10px;color:var(--muted);margin:2px 0 0">'+sub+'</p>':'')+'</div>';
+  kpiBox.innerHTML=
+     k('Unidades em Estoque', G.qtd.toLocaleString('pt-BR'), '#1a3c8a')
+    +k('Valor Compra Total', _epRS(G.pago), '#1a7a4c', '', 'Soma da coluna Valor Compra da base de estoque')
+    +k('Ticket Médio Compra', _epRS(G.ticket), '#7a5a00')
+    +k('% Pago s/ FIPE', G.pctAval?_epPct(G.pctAval):'—', '#c62828', 'valor avaliado ÷ FIPE', 'Média do % pago das avaliações das placas em estoque — mesma conta da aba Avaliações')
+    +k('% Compra s/ FIPE', G.pctFipe?_epPct(G.pctFipe):'—', '#6a1a7a', 'valor compra ÷ FIPE', 'Σ Valor Compra (estoque) ÷ Σ FIPE da avaliação (ponderado)')
+    +k('Compra − Avaliado', (G.delta>=0?'+ ':'− ')+_epRS(Math.abs(G.delta)), G.delta>0?'#c62828':'#1a7a4c', G.delta>0?'pagou acima do avaliado':'pagou dentro do avaliado', 'Σ Valor Compra − Σ Valor Avaliado, nas unidades que casaram')
+    +k('Achadas na Avaliação', _epPct(pctMatch), pctMatch>=0.8?'#1a7a4c':pctMatch>=0.5?'#c8921a':'#c62828', G.match+' de '+G.qtd+' placas', 'Placas do estoque encontradas nas avaliações dos últimos '+_epMeta.meses+' meses');
+
+  // agrega por modelo
+  const map={};
+  rows.forEach(r=>{ (map[r.familia]=map[r.familia]||[]).push(r); });
+  let mods=Object.entries(map).map(([f,rs])=>Object.assign({familia:f,rows:rs},_epAgrega(rs)));
+  const mul=_epSort.dir==='asc'?1:-1;
+  mods.sort((a,b)=>{ const va=a[_epSort.col], vb=b[_epSort.col];
+    if(typeof va==='string') return va<vb?-1*mul:va>vb?1*mul:0; return ((va||0)-(vb||0))*mul; });
+  window._epMods=mods;
+
+  const TH='background:#1a2a48;color:#fff;padding:8px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap;cursor:pointer;user-select:none';
+  const TD='padding:7px 12px;white-space:nowrap;border-bottom:1px solid var(--border)';
+  const arr=c=>_epSort.col===c?(_epSort.dir==='asc'?' ▲':' ▼'):' ⇅';
+  const th=(rot,c,al)=>'<th style="'+TH+';text-align:'+al+'" onclick="sortEstPago(\''+c+'\')">'+rot+'<span style="opacity:.6;font-size:9px">'+arr(c)+'</span></th>';
+  const diasCor=v=>v<30?'var(--green)':v<60?'var(--blue)':v<90?'var(--amber)':'var(--red)';
+
+  let h='<div style="border:1px solid var(--border);border-radius:3px;overflow:hidden">'
+    +'<div style="background:#111;color:#fff;padding:9px 14px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px">Estoque × Pago por Modelo — '+_epMeta.aba+'</div>'
+    +'<div class="tbl-wrap"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr>'
+    +'<th style="'+TH+';text-align:center;width:44px;cursor:default">#</th>'
+    +th('Modelo','familia','left')+th('Qtd.','qtd','right')+th('Valor Compra','pago','right')
+    +th('Ticket Compra','ticket','right')+th('% Pago s/ FIPE','pctAval','right')+th('% Compra s/ FIPE','pctFipe','right')
+    +th('Compra − Avaliado','delta','right')+th('Média Dias','dias','right')+th('Achadas','match','right')
+    +'</tr></thead><tbody>';
+  mods.forEach((m,i)=>{
+    const id='ep_d_'+i;
+    h+='<tr style="background:'+(i%2===0?'#fafaf8':'#fff')+';cursor:pointer" onclick="toggleEpDrill('+i+')">'
+      +'<td style="'+TD+';text-align:center;color:#999;font-weight:700"><span id="ep_a_'+i+'" style="color:#1a2a48">+</span> '+(i+1)+'</td>'
+      +'<td style="'+TD+';font-weight:600">'+m.familia+'</td>'
+      +'<td style="'+TD+';text-align:right;font-weight:700">'+m.qtd+'</td>'
+      +'<td style="'+TD+';text-align:right;font-weight:700">'+_epRS(m.pago)+'</td>'
+      +'<td style="'+TD+';text-align:right">'+_epRS(m.ticket)+'</td>'
+      +'<td style="'+TD+';text-align:right;font-weight:700;color:'+(m.pctAval>0.85?'var(--red)':m.pctAval>0.78?'var(--amber)':'var(--green)')+'">'+(m.pctAval?_epPct(m.pctAval):'—')+'</td>'
+      +'<td style="'+TD+';text-align:right;color:var(--muted)">'+(m.pctFipe?_epPct(m.pctFipe):'—')+'</td>'
+      +'<td style="'+TD+';text-align:right;color:'+(m.delta>0?'var(--red)':'var(--muted)')+'">'+(m.match?(m.delta>=0?'+ ':'− ')+_epRS(Math.abs(m.delta)):'—')+'</td>'
+      +'<td style="'+TD+';text-align:right;font-weight:700;color:'+diasCor(m.dias)+'">'+Math.round(m.dias)+' dias</td>'
+      +'<td style="'+TD+';text-align:right;color:var(--muted)">'+m.match+'/'+m.qtd+'</td>'
+      +'</tr><tr id="'+id+'" style="display:none"><td colspan="10" style="padding:0;background:#f4f6fa"></td></tr>';
+  });
+  h+='<tr style="background:#111;color:#fff;font-weight:700">'
+    +'<td style="padding:8px 12px" colspan="2">TOTAL</td>'
+    +'<td style="padding:8px 12px;text-align:right">'+G.qtd+'</td>'
+    +'<td style="padding:8px 12px;text-align:right">'+_epRS(G.pago)+'</td>'
+    +'<td style="padding:8px 12px;text-align:right">'+_epRS(G.ticket)+'</td>'
+    +'<td style="padding:8px 12px;text-align:right">'+(G.pctAval?_epPct(G.pctAval):'—')+'</td>'
+    +'<td style="padding:8px 12px;text-align:right">'+(G.pctFipe?_epPct(G.pctFipe):'—')+'</td>'
+    +'<td style="padding:8px 12px;text-align:right">'+(G.delta>=0?'+ ':'− ')+_epRS(Math.abs(G.delta))+'</td>'
+    +'<td style="padding:8px 12px;text-align:right">'+Math.round(G.dias)+' dias</td>'
+    +'<td style="padding:8px 12px;text-align:right">'+G.match+'/'+G.qtd+'</td>'
+    +'</tr></tbody></table></div></div>';
+  tab.innerHTML=h;
+
+  rod.innerHTML='Valor pago = coluna <b>'+_epMeta.cVC+'</b> da base de Estoque. FIPE e valor avaliado vêm da avaliação mais recente da placa (desativadas fora). '
+    +'Avaliações lidas: '+(_epMeta.lidas.length?_epMeta.lidas.join(', '):'nenhuma')
+    +(_epMeta.falhas.length?' · <span style="color:var(--amber)">falharam: '+_epMeta.falhas.join(', ')+'</span>':'');
+}
+
+function toggleEpDrill(i){
+  const tr=document.getElementById('ep_d_'+i), a=document.getElementById('ep_a_'+i);
+  if(!tr) return;
+  if(tr.style.display!=='none'){ tr.style.display='none'; if(a) a.textContent='+'; return; }
+  const m=(window._epMods||[])[i]; if(!m) return;
+  const TH='background:#2a3a58;color:#fff;padding:6px 10px;font-size:10px;font-weight:700;text-transform:uppercase;white-space:nowrap';
+  const TD='padding:5px 10px;font-size:11px;border-bottom:1px solid #e2e6ee;white-space:nowrap';
+  const rs=m.rows.slice().sort((x,y)=>y.dias-x.dias);
+  let h='<div style="padding:8px 14px;overflow-x:auto"><table style="width:100%;min-width:1100px;border-collapse:collapse;background:#fff;border:1px solid #d5dae6"><thead><tr>'
+    +['Placa','Modelo','Loja','Tipo','Dias','Valor Compra','Valor Avaliado','FIPE','% Pago s/ FIPE','% Compra s/ FIPE','Compra − Avaliado','Avaliador','Data Aval.']
+      .map((c,k)=>'<th style="'+TH+';text-align:'+(k>=4&&k<=10?'right':'left')+'">'+c+'</th>').join('')
+    +'</tr></thead><tbody>';
+  rs.forEach((r,k)=>{
+    const a=r.aval, pct=(a&&a.fipe>0&&r.pago>0)?r.pago/a.fipe:0, d=a?r.pago-a.valorAval:null;
+    const pAv=(a&&a.fipe>0)?a.valorAval/a.fipe:0;
+    const corAv=pAv>0.85?'#c62828':pAv>0.78?'#c8921a':'#1a7a4c';
+    h+='<tr style="background:'+(k%2===0?'#fff':'#f6f8fc')+'">'
+      +'<td style="'+TD+';font-weight:700">'+(r.placa||'—')+'</td>'
+      +'<td style="'+TD+'">'+(r.modeloFull||'—')+'</td>'
+      +'<td style="'+TD+'">'+r.loja+'</td>'
+      +'<td style="'+TD+'">'+(r.tipo||'—')+'</td>'
+      +'<td style="'+TD+';text-align:right">'+r.dias+'</td>'
+      +'<td style="'+TD+';text-align:right;font-weight:700">'+(r.pago?_epRS(r.pago):'—')+'</td>'
+      +'<td style="'+TD+';text-align:right">'+(a?_epRS(a.valorAval):'<span style="color:#c62828">sem avaliação</span>')+'</td>'
+      +'<td style="'+TD+';text-align:right;color:var(--muted)">'+(a&&a.fipe?_epRS(a.fipe):'—')+'</td>'
+      +'<td style="'+TD+';text-align:right;font-weight:700;color:'+corAv+'">'+(pAv&&pAv<=3?_epPct(pAv):'—')+'</td>'
+      +'<td style="'+TD+';text-align:right;color:var(--muted)">'+(pct?_epPct(pct):'—')+'</td>'
+      +'<td style="'+TD+';text-align:right;color:'+(d>0?'#c62828':'var(--muted)')+'">'+(d===null?'—':(d>=0?'+ ':'− ')+_epRS(Math.abs(d)))+'</td>'
+      +'<td style="'+TD+'">'+(a?a.avaliador||'—':'—')+'</td>'
+      +'<td style="'+TD+'">'+(a?_av2FmtData(a.data):'—')+'</td>'
+      +'</tr>';
+  });
+  tr.style.display=''; tr.firstChild.innerHTML=h+'</tbody></table></div>';
+  if(a) a.textContent='−';
+}
 
 // ── AGING ESTOQUE ─────────────────────────────────────────────────────────────
 // Reutiliza dados já carregados do Estoque (_estoqueRawRows)
