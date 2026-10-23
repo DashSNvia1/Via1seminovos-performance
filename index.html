@@ -690,8 +690,8 @@ th:hover .col-rh,.col-rh:hover,.col-rh.rh-drag{opacity:1;background:rgba(255,255
   <div class="ptab active" id="ptVendas" data-page="vendas" draggable="true">Vendas por Modelo</div>
   <div class="ptab" id="ptAging" data-page="aging" draggable="true">Aging Vendas</div>
   <div class="ptab" id="ptGiro" data-page="giro" draggable="true">Giro de Estoque</div>
-  <div class="ptab" id="ptTempoEstoque" data-page="tempo-estoque" draggable="true">Tempo de Estoque</div>
-  <div class="ptab" id="ptCritico" data-page="critico" draggable="true">Estoque Crítico</div>
+  <div class="ptab" id="ptTempoEstoque" data-page="tempo-estoque" draggable="true">Volumetria Estoque</div>
+  <div class="ptab" id="ptCritico" data-page="critico" draggable="true">Estoque Antigo</div>
   <div class="ptab" id="ptAval" data-page="aval" draggable="true">Tempo de Avaliação</div>
   <div class="ptab" id="ptEstoque" data-page="estoque" draggable="true">Estoque</div>
   <div class="ptab" id="ptAgingEstoque" data-page="aging-estoque" draggable="true">Aging Estoque</div>
@@ -4039,7 +4039,7 @@ function buildTempoEstTab(regId, regionRows, name, lojaFilter){
   cont.innerHTML=
   filterBar
   +'<div style="background:#111;padding:14px 20px 12px;border-radius:3px 3px 0 0;margin-bottom:16px">'
-    +'<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap"><div style="color:#fff;font-size:17px;font-weight:700">Tempo de Estoque por Modelo — '+name+'</div>'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap"><div style="color:#fff;font-size:17px;font-weight:700">Volumetria de Estoque por Modelo — '+name+'</div>'
     +'<button onclick="exportTempoEstExcel(\''+regId+'\')" style="background:#1a7a4c;color:#fff;border:none;border-radius:3px;padding:7px 16px;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px">⬇ Exportar Excel</button></div>'
     +'<div style="color:#999;font-size:10px;text-transform:uppercase;letter-spacing:1px;margin-top:2px">Média de dias em estoque (unidades atualmente em estoque) por família'+(regId==='bace'?' · Bahia e Ceará':regId==='pepb'?' · Pernambuco e Paraíba':'')+'</div>'
   +'</div>'
@@ -4192,7 +4192,7 @@ function exportTempoEstExcel(regId){
 
   let h='<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">'
     +'<head><meta charset="UTF-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet>'
-    +'<x:Name>Tempo de Estoque</x:Name><x:WorksheetOptions>'
+    +'<x:Name>Volumetria Estoque</x:Name><x:WorksheetOptions>'
     +'<x:FreezePanes/><x:FrozenNoSplit/><x:SplitHorizontal>1</x:SplitHorizontal><x:TopRowBottomPane>1</x:TopRowBottomPane><x:ActivePane>2</x:ActivePane>'
     +'<x:DisplayGridlines/></x:WorksheetOptions>'
     +'</x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->'
@@ -4260,7 +4260,7 @@ function exportTempoEstExcel(regId){
   const blob=new Blob(['\ufeff'+h],{type:'application/vnd.ms-excel;charset=utf-8'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
-  const fname='tempo_estoque_'+(sheetNome||'').replace(/[^a-zA-Z0-9]/g,'_')+'_'+regNome.replace(/[^a-zA-Z0-9]/g,'')+'.xls';
+  const fname='volumetria_estoque_'+(sheetNome||'').replace(/[^a-zA-Z0-9]/g,'_')+'_'+regNome.replace(/[^a-zA-Z0-9]/g,'')+'.xls';
   a.href=url; a.download=fname; document.body.appendChild(a); a.click();
   setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(url); },100);
 }
@@ -4857,7 +4857,7 @@ function buildCriticoContent(target, rows, name) {
   body.innerHTML=`
   <!-- Header -->
   <div style="background:#9a1c1c;padding:14px 20px 12px;border-bottom:3px solid #7a1212;border-radius:3px 3px 0 0;margin-bottom:16px">
-    <div style="font-size:19px;font-weight:700;color:#fff">Estoque Crítico — ${name}</div>
+    <div style="font-size:19px;font-weight:700;color:#fff">Estoque Antigo — ${name}</div>
     <div style="font-size:9px;color:rgba(255,255,255,.7);text-transform:uppercase;letter-spacing:2px;margin-top:3px">Carros vendidos com mais de 60 dias em estoque · SHOWROOM</div>
   </div>
 
