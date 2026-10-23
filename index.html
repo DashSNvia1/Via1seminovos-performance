@@ -5902,7 +5902,6 @@ function renderEstPagoContent(){
     +k('Ticket Médio Compra', _epRS(G.ticket), '#7a5a00')
     +k('% Pago s/ FIPE', G.pctAval?_epPct(G.pctAval):'—', '#c62828', 'valor avaliado ÷ FIPE', 'Média do % pago das avaliações das placas em estoque — mesma conta da aba Avaliações')
     +k('% Compra s/ FIPE', G.pctFipe?_epPct(G.pctFipe):'—', '#6a1a7a', 'valor compra ÷ FIPE', 'Σ Valor Compra (estoque) ÷ Σ FIPE da avaliação (ponderado)')
-    +k('Compra − Avaliado', (G.delta>=0?'+ ':'− ')+_epRS(Math.abs(G.delta)), G.delta>0?'#c62828':'#1a7a4c', G.delta>0?'pagou acima do avaliado':'pagou dentro do avaliado', 'Σ Valor Compra − Σ Valor Avaliado, nas unidades que casaram')
     +k('Achadas na Avaliação', _epPct(pctMatch), pctMatch>=0.8?'#1a7a4c':pctMatch>=0.5?'#c8921a':'#c62828', G.match+' de '+G.qtd+' placas', 'Placas do estoque encontradas nas avaliações dos últimos '+_epMeta.meses+' meses');
 
   // agrega por modelo
@@ -5926,7 +5925,7 @@ function renderEstPagoContent(){
     +'<th style="'+TH+';text-align:center;width:44px;cursor:default">#</th>'
     +th('Modelo','familia','left')+th('Qtd.','qtd','right')+th('Valor Compra','pago','right')
     +th('Ticket Compra','ticket','right')+th('% Pago s/ FIPE','pctAval','right')+th('% Compra s/ FIPE','pctFipe','right')
-    +th('Compra − Avaliado','delta','right')+th('Média Dias','dias','right')+th('Achadas','match','right')
+    +th('Média Dias','dias','right')+th('Achadas','match','right')
     +'</tr></thead><tbody>';
   mods.forEach((m,i)=>{
     const id='ep_d_'+i;
@@ -5938,10 +5937,9 @@ function renderEstPagoContent(){
       +'<td style="'+TD+';text-align:right">'+_epRS(m.ticket)+'</td>'
       +'<td style="'+TD+';text-align:right;font-weight:700;color:'+(m.pctAval>0.85?'var(--red)':m.pctAval>0.78?'var(--amber)':'var(--green)')+'">'+(m.pctAval?_epPct(m.pctAval):'—')+'</td>'
       +'<td style="'+TD+';text-align:right;color:var(--muted)">'+(m.pctFipe?_epPct(m.pctFipe):'—')+'</td>'
-      +'<td style="'+TD+';text-align:right;color:'+(m.delta>0?'var(--red)':'var(--muted)')+'">'+(m.match?(m.delta>=0?'+ ':'− ')+_epRS(Math.abs(m.delta)):'—')+'</td>'
       +'<td style="'+TD+';text-align:right;font-weight:700;color:'+diasCor(m.dias)+'">'+Math.round(m.dias)+' dias</td>'
       +'<td style="'+TD+';text-align:right;color:var(--muted)">'+m.match+'/'+m.qtd+'</td>'
-      +'</tr><tr id="'+id+'" style="display:none"><td colspan="10" style="padding:0;background:#f4f6fa"></td></tr>';
+      +'</tr><tr id="'+id+'" style="display:none"><td colspan="9" style="padding:0;background:#f4f6fa"></td></tr>';
   });
   h+='<tr style="background:#111;color:#fff;font-weight:700">'
     +'<td style="padding:8px 12px" colspan="2">TOTAL</td>'
@@ -5950,7 +5948,6 @@ function renderEstPagoContent(){
     +'<td style="padding:8px 12px;text-align:right">'+_epRS(G.ticket)+'</td>'
     +'<td style="padding:8px 12px;text-align:right">'+(G.pctAval?_epPct(G.pctAval):'—')+'</td>'
     +'<td style="padding:8px 12px;text-align:right">'+(G.pctFipe?_epPct(G.pctFipe):'—')+'</td>'
-    +'<td style="padding:8px 12px;text-align:right">'+(G.delta>=0?'+ ':'− ')+_epRS(Math.abs(G.delta))+'</td>'
     +'<td style="padding:8px 12px;text-align:right">'+Math.round(G.dias)+' dias</td>'
     +'<td style="padding:8px 12px;text-align:right">'+G.match+'/'+G.qtd+'</td>'
     +'</tr></tbody></table></div></div>';
@@ -5970,8 +5967,8 @@ function toggleEpDrill(i){
   const TD='padding:5px 10px;font-size:11px;border-bottom:1px solid #e2e6ee;white-space:nowrap';
   const rs=m.rows.slice().sort((x,y)=>y.dias-x.dias);
   let h='<div style="padding:8px 14px;overflow-x:auto"><table style="width:100%;min-width:1100px;border-collapse:collapse;background:#fff;border:1px solid #d5dae6"><thead><tr>'
-    +['Placa','Modelo','Loja','Tipo','Dias','Valor Compra','Valor Avaliado','FIPE','% Pago s/ FIPE','% Compra s/ FIPE','Compra − Avaliado','Avaliador','Data Aval.']
-      .map((c,k)=>'<th style="'+TH+';text-align:'+(k>=4&&k<=10?'right':'left')+'">'+c+'</th>').join('')
+    +['Placa','Modelo','Loja','Estoque','Dias','Valor Compra','FIPE','% Pago s/ FIPE','% Compra s/ FIPE','Data Aval.']
+      .map((c,k)=>'<th style="'+TH+';text-align:'+(k>=4&&k<=8?'right':'left')+'">'+c+'</th>').join('')
     +'</tr></thead><tbody>';
   rs.forEach((r,k)=>{
     const a=r.aval, pct=(a&&a.fipe>0&&r.pago>0)?r.pago/a.fipe:0, d=a?r.pago-a.valorAval:null;
@@ -5984,12 +5981,9 @@ function toggleEpDrill(i){
       +'<td style="'+TD+'">'+(r.tipo||'—')+'</td>'
       +'<td style="'+TD+';text-align:right">'+r.dias+'</td>'
       +'<td style="'+TD+';text-align:right;font-weight:700">'+(r.pago?_epRS(r.pago):'—')+'</td>'
-      +'<td style="'+TD+';text-align:right">'+(a?_epRS(a.valorAval):'<span style="color:#c62828">sem avaliação</span>')+'</td>'
-      +'<td style="'+TD+';text-align:right;color:var(--muted)">'+(a&&a.fipe?_epRS(a.fipe):'—')+'</td>'
+      +'<td style="'+TD+';text-align:right;color:var(--muted)">'+(a ? (a.fipe?_epRS(a.fipe):'—') : '<span style="color:#c62828">sem avaliação</span>')+'</td>'
       +'<td style="'+TD+';text-align:right;font-weight:700;color:'+corAv+'">'+(pAv&&pAv<=3?_epPct(pAv):'—')+'</td>'
       +'<td style="'+TD+';text-align:right;color:var(--muted)">'+(pct?_epPct(pct):'—')+'</td>'
-      +'<td style="'+TD+';text-align:right;color:'+(d>0?'#c62828':'var(--muted)')+'">'+(d===null?'—':(d>=0?'+ ':'− ')+_epRS(Math.abs(d)))+'</td>'
-      +'<td style="'+TD+'">'+(a?a.avaliador||'—':'—')+'</td>'
       +'<td style="'+TD+'">'+(a?_av2FmtData(a.data):'—')+'</td>'
       +'</tr>';
   });
