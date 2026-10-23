@@ -285,15 +285,6 @@ th:hover .col-rh,.col-rh:hover,.col-rh.rh-drag{opacity:1;background:rgba(255,255
       <div class="config-status" id="st-aval"></div>
     </div>
     <div>
-      <div class="config-box-title">🚗 Acompanhamento de Vendas</div>
-      <div class="config-row">
-        <input class="config-input" id="apiUrl3" type="text" placeholder="https://script.google.com/...">
-        <button class="btn-save" onclick="saveURL('acomp')">Salvar</button>
-        <button class="btn-clear" onclick="clearURL('acomp')">✕</button>
-      </div>
-      <div class="config-status" id="st-acomp"></div>
-    </div>
-    <div>
       <div class="config-box-title">📦 Estoque</div>
       <div class="config-row">
         <input class="config-input" id="apiUrl4" type="text" placeholder="https://script.google.com/...">
@@ -560,14 +551,6 @@ th:hover .col-rh,.col-rh:hover,.col-rh.rh-drag{opacity:1;background:rgba(255,255
   <div id="critico-tab-pepb" style="padding:12px 20px 60px;display:none"></div>
 </div>
 
-<!-- ACOMPANHAMENTO PAGE -->
-<div id="pageAcomp" style="display:none">
-  <div style="background:#fff;border-bottom:1px solid var(--border);padding:6px 20px;display:flex;align-items:center;gap:12px">
-    <div><div class="filter-label">Mês</div>
-    <select class="sheet-select" id="acompSheetSelect" onchange="loadAcompSheet(this.value)" style="min-width:220px"></select></div>
-  </div>
-  <div style="padding:16px 20px 60px" id="acomp-body"></div>
-</div>
 <!-- ESTOQUE PAGE -->
 <div id="pageEstoque" style="display:none">
   <div id="estoque-filter-bar" style="background:#fff;border-bottom:1px solid var(--border);padding:6px 20px;display:flex;align-items:center;gap:8px">
@@ -710,7 +693,6 @@ th:hover .col-rh,.col-rh:hover,.col-rh.rh-drag{opacity:1;background:rgba(255,255
   <div class="ptab" id="ptTempoEstoque" data-page="tempo-estoque" draggable="true">Tempo de Estoque</div>
   <div class="ptab" id="ptCritico" data-page="critico" draggable="true">Estoque Crítico</div>
   <div class="ptab" id="ptAval" data-page="aval" draggable="true">Tempo de Avaliação</div>
-  <div class="ptab" id="ptAcomp" data-page="acomp" draggable="true">Acompanhamento de Vendas</div>
   <div class="ptab" id="ptEstoque" data-page="estoque" draggable="true">Estoque</div>
   <div class="ptab" id="ptAgingEstoque" data-page="aging-estoque" draggable="true">Aging Estoque</div>
   <div class="ptab" id="ptAgingOficina" data-page="aging-oficina" draggable="true">Aging Oficina</div>
@@ -851,7 +833,6 @@ try { _lsRm('v1_vendas'); } catch(e){}
 // (antes um _lsRm apagava o que era salvo a cada boot: "arrumei ontem, hoje voltou")
 // Para voltar ao padrão, use o ✕ ao lado do campo em ⚙.
 let API_AVAL    = _ls('v1_aval', URL_AVAL);
-let API_ACOMP   = _ls('v1_acomp',   'https://script.google.com/macros/s/AKfycbwi67zRTahAD7b_KbqIrH9d1g0FKETD5Ui-o4azwDL64W3Wdoo7NfmmIYyIy7wOh1SCuA/exec');
 let API_ESTOQUE = _ls('v1_estoque', 'https://script.google.com/macros/s/AKfycbzO8yYahoKvXi4LjVFOGzDciDkO2EDmqu605nuHmfdFZkswSLSrnJcm7MaLotbK5s-J/exec');
 // Oficina: URL FIXA embutida (não usa localStorage, para sempre subir certa no GitHub).
 let API_OFICINA = 'https://script.google.com/macros/s/AKfycbwzIukMNDvpxtXcsVs8VcTzG6Kf6lhm-PALfLiErusEy1ki8z0UXGWuuBRr-faTqaoj/exec';
@@ -876,7 +857,6 @@ let detailSortStates = {};
 window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('apiUrl').value  = API_VENDAS;
   document.getElementById('apiUrl2').value = API_AVAL;
-  document.getElementById('apiUrl3').value = API_ACOMP   || '';
   document.getElementById('apiUrl4').value = API_ESTOQUE || '';
   document.getElementById('apiUrl5').value = API_OFICINA || '';
   document.getElementById('apiUrl6').value = API_BACKCUSTO || '';
@@ -884,7 +864,6 @@ window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('apiUrl8').value = API_AVAL2 || '';
   if(API_VENDAS)  { document.getElementById('st-vendas').textContent='✓ Configurado';  document.getElementById('st-vendas').style.color='var(--green)'; }
   if(API_AVAL)    { document.getElementById('st-aval').textContent='✓ Configurado';    document.getElementById('st-aval').style.color='var(--green)'; }
-  if(API_ACOMP)   { document.getElementById('st-acomp').textContent='✓ Configurado';   document.getElementById('st-acomp').style.color='var(--green)'; }
   if(API_ESTOQUE) { document.getElementById('st-estoque').textContent='✓ Configurado'; document.getElementById('st-estoque').style.color='var(--green)'; }
   if(API_OFICINA) { document.getElementById('st-oficina').textContent='✓ Configurado'; document.getElementById('st-oficina').style.color='var(--green)'; }
   if(API_BACKCUSTO) { document.getElementById('st-backcusto').textContent='✓ Configurado'; document.getElementById('st-backcusto').style.color='var(--green)'; }
@@ -958,14 +937,13 @@ function _jsonpRaw(baseUrl, params, _tentativa) {
 // ── CONFIG ────────────────────────────────────────────────────────────────────
 function toggleConfig() { document.getElementById('configPanel').style.display = document.getElementById('configPanel').style.display==='block'?'none':'block'; }
 function saveURL(which) {
-  const id   = which==='vendas'?'apiUrl': which==='aval'?'apiUrl2': which==='acomp'?'apiUrl3': which==='estoque'?'apiUrl4': which==='backcusto'?'apiUrl6': which==='backprodpe'?'apiUrl7': which==='aval2'?'apiUrl8':'apiUrl5';
-  const key  = which==='vendas'?'v1_vendas': which==='aval'?'v1_aval': which==='acomp'?'v1_acomp': which==='estoque'?'v1_estoque': which==='backcusto'?'v1_backcusto': which==='backprodpe'?'v1_backprodpe': which==='aval2'?'v1_aval2':'v1_oficina';
-  const stId = which==='vendas'?'st-vendas': which==='aval'?'st-aval': which==='acomp'?'st-acomp': which==='estoque'?'st-estoque': which==='backcusto'?'st-backcusto': which==='backprodpe'?'st-backprodpe': which==='aval2'?'st-aval2':'st-oficina';
+  const id   = which==='vendas'?'apiUrl': which==='aval'?'apiUrl2': which==='estoque'?'apiUrl4': which==='backcusto'?'apiUrl6': which==='backprodpe'?'apiUrl7': which==='aval2'?'apiUrl8':'apiUrl5';
+  const key  = which==='vendas'?'v1_vendas': which==='aval'?'v1_aval': which==='estoque'?'v1_estoque': which==='backcusto'?'v1_backcusto': which==='backprodpe'?'v1_backprodpe': which==='aval2'?'v1_aval2':'v1_oficina';
+  const stId = which==='vendas'?'st-vendas': which==='aval'?'st-aval': which==='estoque'?'st-estoque': which==='backcusto'?'st-backcusto': which==='backprodpe'?'st-backprodpe': which==='aval2'?'st-aval2':'st-oficina';
   const val  = document.getElementById(id).value.trim();
   if(!val) return alert('Cole a URL do Apps Script');
   if(which==='vendas')        { API_VENDAS=val;  _lsSet(key,val); }
   else if(which==='aval')     { API_AVAL=val;    _lsSet(key,val); }
-  else if(which==='acomp')    { API_ACOMP=val;   _lsSet(key,val); }
   else if(which==='estoque')  { API_ESTOQUE=val; _lsSet(key,val); }
   else if(which==='backcusto'){ API_BACKCUSTO=val; _lsSet(key,val);
     const selbc=document.getElementById('backCustoSheetSelect'); if(selbc) selbc.innerHTML='';
@@ -984,7 +962,6 @@ function saveURL(which) {
   toggleConfig();
   if(which==='vendas') loadVendas();
   else if(which==='aval') { avalData=null; loadAval(); }
-  else if(which==='acomp' && typeof loadAcomp==='function') loadAcomp();
   else if(which==='estoque') {
     const sel1 = document.getElementById('estoqueSheetSelect');
     const sel2 = document.getElementById('agingEstoqueSheetSelect');
@@ -1002,12 +979,11 @@ function saveURL(which) {
   }
 }
 function clearURL(which) {
-  const id   = which==='vendas'?'apiUrl': which==='aval'?'apiUrl2': which==='acomp'?'apiUrl3': which==='estoque'?'apiUrl4': which==='backcusto'?'apiUrl6': which==='backprodpe'?'apiUrl7': which==='aval2'?'apiUrl8':'apiUrl5';
-  const key  = which==='vendas'?'v1_vendas': which==='aval'?'v1_aval': which==='acomp'?'v1_acomp': which==='estoque'?'v1_estoque': which==='backcusto'?'v1_backcusto': which==='backprodpe'?'v1_backprodpe': which==='aval2'?'v1_aval2':'v1_oficina';
-  const stId = which==='vendas'?'st-vendas': which==='aval'?'st-aval': which==='acomp'?'st-acomp': which==='estoque'?'st-estoque': which==='backcusto'?'st-backcusto': which==='backprodpe'?'st-backprodpe': which==='aval2'?'st-aval2':'st-oficina';
+  const id   = which==='vendas'?'apiUrl': which==='aval'?'apiUrl2': which==='estoque'?'apiUrl4': which==='backcusto'?'apiUrl6': which==='backprodpe'?'apiUrl7': which==='aval2'?'apiUrl8':'apiUrl5';
+  const key  = which==='vendas'?'v1_vendas': which==='aval'?'v1_aval': which==='estoque'?'v1_estoque': which==='backcusto'?'v1_backcusto': which==='backprodpe'?'v1_backprodpe': which==='aval2'?'v1_aval2':'v1_oficina';
+  const stId = which==='vendas'?'st-vendas': which==='aval'?'st-aval': which==='estoque'?'st-estoque': which==='backcusto'?'st-backcusto': which==='backprodpe'?'st-backprodpe': which==='aval2'?'st-aval2':'st-oficina';
   if(which==='vendas')      { API_VENDAS=''; }
   else if(which==='aval')   { API_AVAL=''; }
-  else if(which==='acomp')  { API_ACOMP=''; }
   else if(which==='estoque'){ API_ESTOQUE=''; }
   else if(which==='backcusto'){ API_BACKCUSTO=''; }
   else if(which==='backprodpe'){ API_BACKPRODPE=''; }
@@ -1028,7 +1004,6 @@ function switchPage(page) {
   document.getElementById('pageAging').style.display   = page==='aging'?'block':'none';
   document.getElementById('pageGiro').style.display    = page==='giro'?'block':'none';
   document.getElementById('pageCritico').style.display = page==='critico'?'block':'none';
-  const _pa=document.getElementById('pageAcomp');if(_pa)_pa.style.display=page==='acomp'?'block':'none';
   const _pe=document.getElementById('pageEstoque');if(_pe)_pe.style.display=page==='estoque'?'block':'none';
   const _pts=document.getElementById('pageTempoEstoque');if(_pts)_pts.style.display=page==='tempo-estoque'?'block':'none';
   const _pae=document.getElementById('pageAgingEstoque');if(_pae)_pae.style.display=page==='aging-estoque'?'block':'none';
@@ -1045,7 +1020,6 @@ function switchPage(page) {
   document.getElementById('ptAging').classList.toggle('active', page==='aging');
   document.getElementById('ptGiro').classList.toggle('active', page==='giro');
   document.getElementById('ptCritico').classList.toggle('active', page==='critico');
-  const _pta=document.getElementById('ptAcomp');if(_pta)_pta.classList.toggle('active',page==='acomp');
   const _pte=document.getElementById('ptEstoque');if(_pte)_pte.classList.toggle('active',page==='estoque');
   const _ptte=document.getElementById('ptTempoEstoque');if(_ptte)_ptte.classList.toggle('active',page==='tempo-estoque');
   const _ptae=document.getElementById('ptAgingEstoque');if(_ptae)_ptae.classList.toggle('active',page==='aging-estoque');
@@ -1074,7 +1048,6 @@ function switchPage(page) {
   if(ctn) ctn.style.display=page==='critico'?'none':'none';
   const cb=document.getElementById('critico-tab-bace');if(cb)cb.style.display='none';
   const cp=document.getElementById('critico-tab-pepb');if(cp)cp.style.display='none';
-  if(page==='acomp') initAcompPage();
   if(page==='estoque') initEstoquePage();
   if(page==='tempo-estoque') initTempoEstoquePage();
 }
@@ -5005,188 +4978,7 @@ function buildCriticoContent(target, rows, name) {
 
 </script>
 <script>
-function initAcompPage() {
-  var body = document.getElementById('acomp-body');
-  if(!API_ACOMP) {
-    if(body) body.innerHTML='<div style="padding:2rem;color:var(--red)">Configure a URL de Acompanhamento em &#9881;</div>';
-    return;
-  }
-  var sel = document.getElementById('acompSheetSelect');
-  if(sel && sel.options.length > 0) return;
-  loadAcompSheets();
-}
 
-async function loadAcompSheets() {
-  try {
-    var sd = await jsonp(API_ACOMP, {sheet:'__sheets__'});
-    var sheets = sd.sheets||[];
-    var sel = document.getElementById('acompSheetSelect');
-    sel.innerHTML = sheets.map(function(s){ return '<option value="'+s+'">'+s.trim()+'</option>'; }).join('');
-    var last = sheets[sheets.length-1];
-    sel.value = last;
-    await loadAcompSheet(last);
-  } catch(e) {
-    document.getElementById('acomp-body').innerHTML='<div style="padding:2rem;color:var(--red)">Erro: '+e.message+'</div>';
-  }
-}
-
-async function loadAcompSheet(name) {
-  var body = document.getElementById('acomp-body');
-  body.innerHTML='<div style="padding:2rem;text-align:center;color:var(--muted)"><div class="spin2" style="margin:0 auto 8px"></div>Carregando...</div>';
-  try {
-    var data = await jsonp(API_ACOMP, {sheet:name});
-    if(data.error) throw new Error(data.error);
-    renderAcomp(data, name);
-  } catch(e) {
-    body.innerHTML='<div style="padding:2rem;color:var(--red)">Erro: '+e.message+'</div>';
-  }
-}
-
-function numV(v) {
-  if(v===''||v===null||v===undefined) return 0;
-  if(typeof v==='number') return v;
-  return parseFloat(String(v).replace(',','.').replace('%',''))||0;
-}
-function fmtN(v){ var n=Math.round(numV(v)); return n===0?'&#8212;':n; }
-function pAtgColor(v){v=numV(v);return v>=0.30?'var(--green)':v>=0.15?'var(--amber)':'var(--red)';}
-function pFatuColor(v){v=numV(v);return v>=0.40?'var(--green)':v>=0.25?'var(--amber)':'var(--red)';}
-function progBar(v,color){
-  var pct=Math.min(Math.round(numV(v)*100),100);
-  return '<div style="display:flex;align-items:center;gap:8px">'
-    +'<div style="flex:1;background:#e8e7e0;border-radius:2px;height:7px;overflow:hidden;min-width:80px">'
-    +'<div style="width:'+pct+'%;background:'+color+';height:100%;border-radius:2px"></div></div>'
-    +'<span style="font-weight:700;color:'+color+';font-size:12px;width:40px;text-align:right">'+pct+'%</span></div>';
-}
-</script>
-
-<script>
-function renderAcomp(data, name) {
-  const body = document.getElementById('acomp-body');
-  const vendaRows = (data.venda&&data.venda.rows)||[];
-  const fatuRows  = (data.faturamento&&data.faturamento.rows)||[];
-  if(!vendaRows.length){body.innerHTML='<div style="padding:2rem;color:var(--muted)">Sem dados nesta aba</div>';return;}
-
-  const fatuMap = {};
-  fatuRows.forEach(function(r){ var l=String(r[0]||'').trim(); if(l) fatuMap[l]=r; });
-
-  var dataRows = vendaRows.filter(function(r){ var l=String(r[0]||'').trim(); return l&&!/^lojas?\s*$/i.test(l); });
-  var mainRows = dataRows.filter(function(r){ return !/^(unidade|nf[\. ]|compras?\s)/i.test(String(r[0]||'').trim()); });
-  var compRows = dataRows.filter(function(r){ var l=String(r[0]||'').trim(); return /^(unidade|nf[\. ]|compras?\s)/i.test(l) && !/^unidade$/i.test(l); });
-  var totalRow = mainRows.find(function(r){ return /total\s*geral/i.test(String(r[0]||'').trim()); });
-
-  var tAcum=totalRow?numV(totalRow[1]):0, tOrc=totalRow?numV(totalRow[2]):0;
-  var tFalt=totalRow?numV(totalRow[3]):0, tAtg=totalRow?numV(totalRow[4]):(tOrc?tAcum/tOrc:0);
-
-  // KPI faturamento: tenta TOTAL GERAL no fatuMap; se não existir, soma todas as lojas individuais
-  var _fg = fatuMap['TOTAL GERAL'] || fatuMap['Total Geral'] || fatuMap['TOTAL GERAL '] || fatuMap['Total GERAL'];
-  var tFatu, tFatuFalt, tPFatu;
-  if(_fg){
-    tFatu=numV(_fg[2]); tFatuFalt=numV(_fg[3]); tPFatu=numV(_fg[4]);
-  } else {
-    tFatu=0;
-    fatuRows.forEach(function(r){
-      var l=String(r[0]||'').trim();
-      if(!l||/^(total|lojas)/i.test(l)) return;
-      tFatu+=numV(r[2]);
-    });
-    tFatuFalt=tFatu-tAcum;
-    tPFatu=tAcum?tFatu/tAcum:0;
-  }
-
-  var th='background:#2a2a2a;color:#fff;padding:9px 14px;font-size:10px;text-transform:uppercase;letter-spacing:.5px';
-
-  var mainHtml = mainRows.map(function(r,i){
-    var loja=String(r[0]||'').trim(); if(!loja) return '';
-    var isTotal=/^total/i.test(loja);
-    var acum=numV(r[1]),orc=numV(r[2]),falt=numV(r[3]),patg=numV(r[4]),foco=numV(r[5]);
-    // Faturamento: usa fatuMap diretamente; só calcula soma se não encontrar
-    var fr = fatuMap[loja];
-    if(!fr && isTotal){
-      var _f=0,_v=0;
-      fatuRows.forEach(function(sr){
-        var sl=String(sr[0]||'').trim();
-        if(!sl||/^(total|lojas)/i.test(sl)) return;
-        _f+=numV(sr[2]); _v+=numV(sr[1]);
-      });
-      fr={1:_v,2:_f,3:_f-numV(r[1]),4:numV(r[1])?_f/numV(r[1]):0};
-    }
-    fr=fr||{};
-    var fatu=numV(fr[2]),fatuFalt=numV(fr[3]),pfatu=numV(fr[4]);
-    var bg=isTotal?'#f0efe9':i%2===0?'#fafaf8':'#fff';
-    return '<tr style="background:'+bg+';border-bottom:1px solid var(--border)">'
-      +'<td style="padding:8px 14px;font-weight:'+(isTotal?700:500)+';'+(isTotal?'border-left:3px solid #111':'')+'">'+(loja)+'</td>'
-      +'<td style="padding:8px 14px;text-align:center;font-weight:700">'+fmtN(acum)+'</td>'
-      +'<td style="padding:8px 14px;text-align:center;color:var(--muted)">'+fmtN(orc)+'</td>'
-      +'<td style="padding:8px 14px;text-align:center;font-weight:600;color:'+(numV(falt)>0?'var(--red)':'var(--green)')+'">'+fmtN(falt)+'</td>'
-      +'<td style="padding:8px 14px">'+(numV(patg)?progBar(patg,pAtgColor(patg)):'&#8212;')+'</td>'
-      +'<td style="padding:8px 14px;text-align:center;color:var(--muted)">'+fmtN(foco)+'</td>'
-      +'<td style="padding:8px 14px;text-align:center;font-weight:600">'+fmtN(fatu)+'</td>'
-      +'<td style="padding:8px 14px;text-align:center;font-weight:600;color:'+(numV(fatuFalt)<0?'var(--red)':'var(--green)')+'">'+fmtN(fatuFalt)+'</td>'
-      +'<td style="padding:8px 14px">'+(numV(pfatu)?progBar(pfatu,pFatuColor(pfatu)):'&#8212;')+'</td>'
-      +'</tr>';
-  }).join('');
-
-  var compHtml = compRows.map(function(r,i){
-    var loja=String(r[0]||'').trim(); if(!loja) return '';
-    var acum=numV(r[1]),orc=numV(r[2]),falt=numV(r[3]),patg=numV(r[4]);
-    return '<tr style="background:'+(i%2===0?'#fafaf8':'#fff')+';border-bottom:1px solid var(--border)">'
-      +'<td style="padding:8px 14px">'+loja+'</td>'
-      +'<td style="padding:8px 14px;text-align:center;font-weight:700">'+fmtN(acum)+'</td>'
-      +'<td style="padding:8px 14px;text-align:center;color:var(--muted)">'+fmtN(orc)+'</td>'
-      +'<td style="padding:8px 14px;text-align:center;color:'+(numV(falt)>0?'var(--red)':'var(--green)')+';font-weight:600">'+fmtN(falt)+'</td>'
-      +'<td style="padding:8px 14px">'+(numV(patg)?progBar(patg,pAtgColor(patg)):'&#8212;')+'</td></tr>';
-  }).join('');
-
-  var html = '<div style="background:#111;padding:14px 20px 12px;border-bottom:2px solid #111;margin-bottom:16px">'
-    +'<div style="font-size:19px;font-weight:700;color:#fff">Acompanhamento de Vendas &#8212; '+name+'</div>'
-    +'<div style="font-size:9px;color:#888;text-transform:uppercase;letter-spacing:2px;margin-top:3px">Metas &#183; Or&#231;amento &#183; Faturamento</div></div>';
-
-  html += '<div style="display:flex;gap:1px;background:var(--border);border:1px solid var(--border);border-radius:3px;overflow:hidden;margin-bottom:20px">'
-    +'<div style="flex:1;background:#fff;padding:11px 14px;border-left:2px solid #111"><div style="font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);font-weight:600;margin-bottom:4px">Total Vendas</div><div style="font-size:26px;font-weight:700;color:#111">'+fmtN(tAcum)+'</div></div>'
-    +'<div style="flex:1;background:#fff;padding:11px 14px"><div style="font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);font-weight:600;margin-bottom:4px">Or&#231;amento</div><div style="font-size:26px;font-weight:700;color:#111">'+fmtN(tOrc)+'</div></div>'
-    +'<div style="flex:1;background:#fff;padding:11px 14px"><div style="font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);font-weight:600;margin-bottom:4px">Faltam</div><div style="font-size:26px;font-weight:700;color:'+(numV(tFalt)>0?'var(--red)':'var(--green)')+'">'+fmtN(tFalt)+'</div></div>'
-    +'<div style="flex:1;background:#f0f8ff;padding:11px 14px"><div style="font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);font-weight:600;margin-bottom:8px">% Atingimento</div>'+progBar(tAtg,pAtgColor(tAtg))+'</div>'
-    +'<div style="flex:1;background:#fff;padding:11px 14px"><div style="font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);font-weight:600;margin-bottom:4px">Total Faturado</div><div style="font-size:26px;font-weight:700;color:#111">'+fmtN(tFatu)+'</div></div>'
-    +'<div style="flex:1;background:#fff;padding:11px 14px"><div style="font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);font-weight:600;margin-bottom:4px">Faltam Faturar</div><div style="font-size:26px;font-weight:700;color:'+(numV(tFatuFalt)<0?'var(--red)':'var(--green)')+'">'+fmtN(tFatuFalt)+'</div></div>'
-    +'<div style="flex:1;background:#f0f8ff;padding:11px 14px"><div style="font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);font-weight:600;margin-bottom:8px">% Faturamento</div>'+progBar(tPFatu,pFatuColor(tPFatu))+'</div>'
-    +'</div>';
-
-  html += '<div style="background:#1e1e1e;color:#fff;padding:8px 14px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;border-radius:3px 3px 0 0">Metas por Loja</div>'
-    +'<div class="tbl-wrap" style="border-radius:0 0 3px 3px;margin-bottom:20px">'
-    +'<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr>'
-    +'<th style="'+th+';text-align:left">Loja</th>'
-    +'<th style="'+th+';text-align:center">Vendas</th>'
-    +'<th style="'+th+';text-align:center">Or&#231;.</th>'
-    +'<th style="'+th+';text-align:center">Faltam</th>'
-    +'<th style="'+th+';text-align:left;min-width:180px">% Atingimento</th>'
-    +'<th style="'+th+';text-align:center">Foco</th>'
-    +'<th style="'+th+';text-align:center">Faturado</th>'
-    +'<th style="'+th+';text-align:center">Falt. Fatu.</th>'
-    +'<th style="'+th+';text-align:left;min-width:180px">% Faturamento</th>'
-    +'</tr></thead><tbody>'+mainHtml+'</tbody></table></div>';
-
-  html += '<div style="display:flex;gap:14px;align-items:center;padding:7px 12px;background:#f5f4f0;border:1px solid var(--border);border-radius:3px;font-size:11px;flex-wrap:wrap;margin-bottom:20px">'
-    +'<span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted)">% Atingimento:</span>'
-    +'<span style="color:var(--green);font-weight:600">Bom (&#8805;30%)</span>'
-    +'<span style="color:var(--amber);font-weight:600">Regular (15&#8211;30%)</span>'
-    +'<span style="color:var(--red);font-weight:600">Cr&#237;tico (&lt;15%)</span>'
-    +'<span style="margin-left:12px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted)">% Faturamento:</span>'
-    +'<span style="color:var(--green);font-weight:600">Bom (&#8805;40%)</span>'
-    +'<span style="color:var(--amber);font-weight:600">Regular (25&#8211;40%)</span>'
-    +'<span style="color:var(--red);font-weight:600">Cr&#237;tico (&lt;25%)</span></div>';
-
-  if(compHtml) {
-    html += '<div style="background:#1e1e1e;color:#fff;padding:8px 14px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;border-radius:3px 3px 0 0">Compras</div>'
-      +'<div class="tbl-wrap" style="border-radius:0 0 3px 3px"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr>'
-      +'<th style="'+th+';text-align:left">Unidade</th>'
-      +'<th style="'+th+';text-align:center">Compras</th>'
-      +'<th style="'+th+';text-align:center">Or&#231;.</th>'
-      +'<th style="'+th+';text-align:center">Faltam</th>'
-      +'<th style="'+th+';text-align:left;min-width:180px">%</th>'
-      +'</tr></thead><tbody>'+compHtml+'</tbody></table></div>';
-  }
-  body.innerHTML = html;
-}
 
 // ── ESTOQUE ───────────────────────────────────────────────────────────────────
 let _estoqueCharts = {};
