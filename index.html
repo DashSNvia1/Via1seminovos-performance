@@ -772,6 +772,7 @@ const COLAB_MAP = {
     'EUROVIA OMODA PRADO - (PE)','EUROVIA RENAULT - AFOGADOS - (PE)',
     'GRANVIA CARUARU - (PE)','GRANVIA FORD - IMBIRIBEIRA - (PE)',
     'INTERVIA KIA - IMBIRIBEIRA - (PE)','Nissan Eurovia Caxangá - (PE)',
+    'EUROVIA - GEELY MADALENA',
     'VIA1 SEMINOVOS AV NORTE - (PE)','VIA1 SEMINOVOS PRADO - (PE)',
     'VIASUL FIAT - ARRUDA - (PE)','VIASUL JEEP - IMBIRIBEIRA - (PE)',
     'ViaSul BYD - Arruda - (PE)'
@@ -779,7 +780,8 @@ const COLAB_MAP = {
   'Thiago e Pedro Igor': [
     'EUROVIA OMODA ALDEOTA - (CE)','RAM - FORTALEZA - (CE)',
     'VIASUL FIAT - DUNAS - (CE)','VIASUL JEEP - DUNAS - (CE)',
-    'ViaSul BYD - FORTALEZA - (CE)','NEWVIA BAJAJ PARQUELÂNDIA - (CE)'
+    'ViaSul BYD - FORTALEZA - (CE)','NEWVIA BAJAJ PARQUELÂNDIA - (CE)',
+    'NEWVIA BAJAJ WS (CE)'
   ],
   'Antonio e Luis': [
     'VIASUL GEELY ACM','EUROVIA NISSAN - IGUATEMI - (BA)',
@@ -791,6 +793,16 @@ const COLAB_MAP = {
     'NEWVIA BAJAJ BONOCO - (BA)'
   ]
 };
+
+// Chave de comparação loja->colaborador. Ignora acento, caixa, hífens e o
+// sufixo de estado "(PE)", "- (CE)" etc. Assim "Nissan Eurovia Caxangá" casa com
+// "Nissan Eurovia Caxangá - (PE)" sem precisar cadastrar as duas grafias.
+// "OFICINA" NÃO é ignorado: unidade de oficina é outra unidade.
+function _colabKey(s){
+  return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase()
+    .replace(/\(\s*(PE|PB|BA|CE)\s*\)/g,' ')
+    .replace(/[^A-Z0-9]+/g,' ').replace(/\s+/g,' ').trim();
+}
 
 const COLAB_REGIONS = {
   'Diogo e Carlão':   'PE (Piedade / Imbiribeira / Recife)',
@@ -3083,8 +3095,8 @@ function sortTop10(tblId, col) {
 
 // ── COLABORADOR DASHBOARD ────────────────────────────────────────────────────
 function computeColabSection(empresas, lojas) {
-  const lojaSet = new Set(lojas.map(l=>l.toLowerCase().trim()));
-  const secEmps = empresas.filter(e => lojaSet.has(e.empresa.toLowerCase().trim()));
+  const lojaSet = new Set(lojas.map(_colabKey));
+  const secEmps = empresas.filter(e => lojaSet.has(_colabKey(e.empresa)));
   const tq  = secEmps.reduce((s,r)=>s+r.qtd,0);
   const to30= secEmps.reduce((s,r)=>s+r.o30,0);
   const tav20=secEmps.reduce((s,r)=>s+r.av20,0);
@@ -3189,8 +3201,8 @@ function renderColabDash() {
   }));
 
   // Resumo comparativo
-  const allLojas = new Set(Object.values(COLAB_MAP).flat().map(l=>l.toLowerCase()));
-  const unmapped = empresas.filter(e => !allLojas.has(e.empresa.toLowerCase()));
+  const allLojas = new Set(Object.values(COLAB_MAP).flat().map(_colabKey));
+  const unmapped = empresas.filter(e => !allLojas.has(_colabKey(e.empresa)));
 
   let html = `
   <div style="background:var(--black);padding:14px 20px 12px;border-bottom:3px solid var(--black)">
@@ -3412,7 +3424,7 @@ function exportAvalExcedentes(){
   if(!raw||!raw.rows||!raw.rows.length){ alert('Carregue um mês na aba Tempo de Avaliação antes de exportar.'); return; }
   const rows=raw.rows, KE=raw.KE, KA=raw.KA, KM=raw.KM, KP=raw.KP, name=raw.name;
   const AVAL_MAX=1800, MESA_MAX=600; // 30min e 10min em segundos
-  const norm=s=>String(s||'').trim().toUpperCase().replace(/\s+/g,' ');
+  const norm=_colabKey;   // mesma regra do Dashboard por Colaborador
   // mapa empresa -> equipe
   const emp2eq={};
   Object.keys(COLAB_MAP).forEach(eq=>COLAB_MAP[eq].forEach(l=>{ emp2eq[norm(l)]=eq; }));
