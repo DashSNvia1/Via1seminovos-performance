@@ -1179,6 +1179,7 @@ async function loadSheet(name, silencioso) {
     const data = await jsonp(API_VENDAS, {sheet:name});
     if(data.error) throw new Error(data.error);
     const rows = mapVendasRows(data.rows, name);
+    if(window._histCache) window._histCache[name]={ts:Date.now(), rows:rows, erro:false}; // histórico usa o mês atual fresco
 
     const baceRows=rows.filter(r=>BA_CE.includes(r.loja));
     const pepbRows=rows.filter(r=>PE_PB.includes(r.loja));
@@ -1206,6 +1207,7 @@ async function loadSheet(name, silencioso) {
     }
     _vendaInitFiltros(base);   // Marca / Modelo / Dias em Estoque
     _histAtualizaDatalist();   // autocomplete do Histórico por Modelo
+    if(!_snap){ const hr=document.getElementById('hist-modelo-result'); if(hr) hr.innerHTML=''; window._histAtivo=false; }
 
     // Guess month/year
     const mu=name.toUpperCase();
@@ -2583,6 +2585,7 @@ function _applyVendaFilters(){
   rawRows.geral=geralF; rawRows.bace=baceF; rawRows.pepb=pepbF;
   renderVendasTable('geral'); renderVendasTable('bace'); renderVendasTable('pepb');
   renderKPIs(_vendaTabAtiva());              // antes o KPI ficava congelado ao filtrar
+  if(window._histAtivo) buscarHistModelo(true); // histórico obedece aos filtros da barra
   _vendaAtualizaLabels();
   const info=document.getElementById('vendaFiltroInfo');
   if(info){
@@ -2663,97 +2666,124 @@ function _histAtualizaDatalist(){
 function limparHistModelo(){
   const i=document.getElementById('hist-modelo-input'); if(i) i.value='';
   const r=document.getElementById('hist-modelo-result'); if(r) r.innerHTML='';
+  window._histAtivo=false;
 }
 function _histNorm(t){ return String(t||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().trim(); }
 
-async function buscarHistModelo(){
-  const inp=document.getElementById('hist-modelo-result');
-  const termo=_histNorm((document.getElementById('hist-modelo-input')||{}).value);
-  if(!inp) return;
-  if(!termo){ inp.innerHTML='<div style="font-size:12px;color:var(--muted)">Digite um modelo.</div>'; return; }
-  const all=window._allVendaRows;
-  if(!all){ inp.innerHTML='<div style="font-size:12px;color:var(--red)">Carregue a base de vendas primeiro.</div>'; return; }
+// Cache dos meses já lidos (10 min): permite refazer o histórico a cada clique
+// de filtro sem bater na API de novo.
+window._histCache = window._histCache || {};
+async function _histCarregaMes(nome){
+  const c=window._histCache[nome];
+  if(c && (Date.now()-c.ts) < 10*60*1000) return c;
+  try{
+    const d=await jsonp(API_VENDAS,{sheet:nome});
+    const out={ts:Date.now(), rows: d.error?[]:mapVendasRows(d.rows,nome), erro: !!d.error};
+    window._histCache[nome]=out; return out;
+  }catch(e){ return {ts:Date.now(), rows:[], erro:true}; }
+}
 
-  // famílias que casam com o termo (exata primeiro; senão, por conteúdo)
-  const fams=[...new Set(all.geral.map(r=>r.familia).filter(Boolean))];
-  let alvo=fams.filter(f=>_histNorm(f)===termo);
-  if(!alvo.length) alvo=fams.filter(f=>_histNorm(f).indexOf(termo)>=0);
-  if(!alvo.length){ inp.innerHTML='<div style="font-size:12px;color:var(--red)">Nenhum modelo encontrado para "'+termo+'" na aba atual.</div>'; return; }
+// Resumo dos filtros ativos, para o cabeçalho do histórico
+function _histResumoFiltros(){
+  const partes=[];
+  const L=window._vendaSelectedLojas, tl=(window._vendaAllLojas||[]).length;
+  partes.push((!L||!L.size||L.size===tl)?'Todas as lojas':(L.size+' loja'+(L.size>1?'s':'')));
+  const M=window._vendaSelMarcas, tm=(window._vendaAllMarcas||[]).length;
+  if(M&&M.size&&M.size<tm) partes.push('Marca: '+[...M].join(', '));
+  const F=window._vendaSelFaixas;
+  if(F&&F.size&&F.size<VENDA_FAIXAS.length) partes.push('Dias: '+VENDA_FAIXAS.filter(f=>F.has(f.k)).map(f=>f.k).join(', '));
+  return partes.join(' · ');
+}
+
+// silencioso=true: refeito por mudança de filtro (sem spinner)
+async function buscarHistModelo(silencioso){
+  const out=document.getElementById('hist-modelo-result');
+  const termo=_histNorm((document.getElementById('hist-modelo-input')||{}).value);
+  if(!out) return;
+  const all=window._allVendaRows;
+  if(!all){ out.innerHTML='<div style="font-size:12px;color:var(--red)">Carregue a base de vendas primeiro.</div>'; return; }
+
+  // Marca de cada família no mês atual — usada para completar meses antigos,
+  // de antes da coluna MARCA existir (senão o filtro de Marca zera esses meses)
+  const marcaDaFam={};
+  all.geral.forEach(r=>{ if(r.marca) marcaDaFam[r.familia]=r.marca; });
+  const comMarca=r=> r.marca ? r : Object.assign({},r,{marca:marcaDaFam[r.familia]||''});
+
+  // Candidatos: famílias do mês atual que passam em TODOS os filtros da barra
+  const passaTudo=r=>_vendaPassa(comMarca(r), null);
+  const fams=[...new Set(all.geral.filter(passaTudo).map(r=>r.familia).filter(Boolean))];
+
+  let alvo;
+  const O=window._vendaSelModelos, to=(window._vendaAllModelos||[]).length;
+  const modeloRestrito = O && O.size && O.size<to;
+  if(termo){
+    alvo=fams.filter(f=>_histNorm(f)===termo);
+    if(!alvo.length) alvo=fams.filter(f=>_histNorm(f).indexOf(termo)>=0);
+  } else if(modeloRestrito){
+    alvo=fams.slice();                       // campo vazio: usa os modelos marcados no filtro
+  } else {
+    out.innerHTML='<div style="font-size:12px;color:var(--muted)">Digite um modelo, ou selecione modelos no filtro Modelo acima.</div>';
+    return;
+  }
+  if(!alvo.length){
+    window._histAtivo=!!termo;               // mantém ativo: se o filtro mudar, pode passar a achar
+    out.innerHTML='<div style="font-size:12px;color:var(--red)">Nenhum modelo'+(termo?' para "'+termo+'"':'')+' dentro dos filtros atuais ('+_histResumoFiltros()+').</div>';
+    return;
+  }
   alvo=alvo.sort().slice(0,5);
+  window._histAtivo=true;
 
   const abas=_histAbasDoTri();
-  if(!abas.length){ inp.innerHTML='<div style="font-size:12px;color:var(--red)">Não consegui identificar as abas do período.</div>'; return; }
+  if(!abas.length){ out.innerHTML='<div style="font-size:12px;color:var(--red)">Não consegui identificar as abas do período.</div>'; return; }
+  if(!silencioso) out.innerHTML='<div style="padding:1rem;color:var(--muted);font-size:12px"><div class="spin2" style="margin:0 auto 8px"></div>Carregando '+abas.length+' mês(es)...</div>';
 
-  inp.innerHTML='<div style="padding:1rem;color:var(--muted);font-size:12px"><div class="spin2" style="margin:0 auto 8px"></div>Carregando '+abas.length+' mês(es)...</div>';
-
-  // carrega as abas (jsonp já tem cache de 8s + dedup)
-  const porMes={};
-  const falhas=[];
+  const porMes={}, falhas=[];
   for(const a of abas){
-    try{
-      const d=await jsonp(API_VENDAS,{sheet:a.nome});
-      porMes[a.nome]= d.error ? [] : mapVendasRows(d.rows, a.nome);
-      if(d.error) falhas.push(a.nome);
-    }catch(e){ porMes[a.nome]=[]; falhas.push(a.nome); }
+    const m=await _histCarregaMes(a.nome);
+    porMes[a.nome]=m.rows.map(comMarca);
+    if(m.erro) falhas.push(a.nome);
   }
-
-  const selLojas=window._vendaSelectedLojas;
-  const lojaOk=r=> !selLojas || selLojas.size===0 || selLojas.has(r.loja);
-  const nLojas=(selLojas&&selLojas.size)||0;
-  const totLojas=(window._vendaAllLojas||[]).length;
-  const escopo=(nLojas===0||nLojas===totLojas)?'Todas as lojas':(nLojas+' loja'+(nLojas>1?'s':'')+' selecionada'+(nLojas>1?'s':''));
 
   const fmtN=v=>Math.round(v||0).toLocaleString('pt-BR');
   const fmtP=v=>((v||0)*100).toFixed(2)+'%';
   const fmtP1=v=>((v||0)*100).toFixed(1)+'%';
   const pCol=v=>v>=0.07?'var(--green)':v>=0.04?'var(--amber)':'var(--red)';
-
   function agrega(rows){
     const vol=rows.reduce((s,r)=>s+(r.vendas||0),0);
     const rec=rows.reduce((s,r)=>s+(r.totalRecebido||0),0);
     const mrg=rows.reduce((s,r)=>s+(r.margemRS||0),0);
-    const comTkm=rows.filter(r=>r.tkm>0);
-    const n=rows.length||1;
-    return {
-      vol, rec, mrg,
+    const comTkm=rows.filter(r=>r.tkm>0), n=rows.length||1;
+    return { vol, rec, mrg,
       tkm: comTkm.length? comTkm.reduce((s,r)=>s+r.tkm,0)/comTkm.length : 0,
-      margem: rec? mrg/rec : 0,                               // ponderada
+      margem: rec? mrg/rec : 0,
       pago: rows.reduce((s,r)=>s+(r.pago||0),0)/n,
       fipe: rows.reduce((s,r)=>s+(r.fipe||0),0)/n,
       dias: rows.reduce((s,r)=>s+(r.diasEstoque||0),0)/n,
-      mrgUn: mrg/n
-    };
+      mrgUn: mrg/n };
   }
 
   const TH='background:#2a2a2a;color:#fff;padding:7px 10px;font-size:10px;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;text-align:';
   const TD='padding:7px 10px;white-space:nowrap;border-bottom:1px solid var(--border);text-align:';
+  const canal=(_histChaveAba(window._vendasSheetAtual||'')||{canal:''}).canal;
+  const resumo=_histResumoFiltros();
   let html='';
 
   alvo.forEach(fam=>{
-    const linhas=abas.slice().sort((a,b)=>a.chave-b.chave).map(a=>{
-      const rows=(porMes[a.nome]||[]).filter(r=>r.familia===fam && lojaOk(r));
-      return {rotulo:a.rotulo, aba:a.nome, n:rows.length, ag:agrega(rows)};
-    });
-    const todas=[].concat(...abas.map(a=>(porMes[a.nome]||[]).filter(r=>r.familia===fam && lojaOk(r))));
-    const tri=agrega(todas);
+    // aplica TODOS os filtros da barra (Operação, Marca, Modelo, Dias) a cada mês
+    const doMes=nome=>(porMes[nome]||[]).filter(r=>r.familia===fam && _vendaPassa(r,null));
+    const linhas=abas.slice().sort((a,b)=>a.chave-b.chave).map(a=>({rotulo:a.rotulo, ag:agrega(doMes(a.nome))}));
+    const tri=agrega([].concat(...abas.map(a=>doMes(a.nome))));
     const prim=linhas[0]&&linhas[0].ag, ult=linhas[linhas.length-1]&&linhas[linhas.length-1].ag;
-    const dVol=(prim&&ult)?ult.vol-prim.vol:0;
-    const dMrg=(prim&&ult)?ult.margem-prim.margem:0;
 
     html+='<div style="margin-bottom:16px;border:1px solid var(--border);border-radius:3px;overflow:hidden">'
       +'<div style="background:#111;color:#fff;padding:8px 14px;font-size:12px;font-weight:700;display:flex;gap:12px;align-items:center;flex-wrap:wrap">'
         +'<span>'+fam+'</span>'
-        +'<span style="font-weight:400;font-size:10px;opacity:.75">'+abas.map(a=>a.rotulo).reverse().join(' · ')+' · '+(_histChaveAba(window._vendasSheetAtual||'')||{canal:''}).canal+' · '+escopo+'</span>'
+        +'<span style="font-weight:400;font-size:10px;opacity:.75">'+abas.map(a=>a.rotulo).reverse().join(' · ')+' · '+canal+' · '+resumo+'</span>'
       +'</div>'
       +'<div class="tbl-wrap" style="border:none"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr>'
-        +'<th style="'+TH+'left">Mês</th>'
-        +'<th style="'+TH+'right">Volume</th>'
-        +'<th style="'+TH+'right">TKM Médio</th>'
-        +'<th style="'+TH+'center">% Venda FIPE</th>'
-        +'<th style="'+TH+'center">% Pago</th>'
-        +'<th style="'+TH+'center">% Margem</th>'
-        +'<th style="'+TH+'right">Margem R$/un.</th>'
-        +'<th style="'+TH+'right">Média Dias</th>'
+        +'<th style="'+TH+'left">Mês</th><th style="'+TH+'right">Volume</th><th style="'+TH+'right">TKM Médio</th>'
+        +'<th style="'+TH+'center">% Venda FIPE</th><th style="'+TH+'center">% Pago</th><th style="'+TH+'center">% Margem</th>'
+        +'<th style="'+TH+'right">Margem R$/un.</th><th style="'+TH+'right">Média Dias</th>'
       +'</tr></thead><tbody>';
     linhas.forEach((l,i)=>{
       const a=l.ag;
@@ -2765,30 +2795,29 @@ async function buscarHistModelo(){
         +'<td style="'+TD+'center">'+(a.vol?fmtP1(a.pago):'—')+'</td>'
         +'<td style="'+TD+'center;font-weight:700;color:'+pCol(a.margem)+'">'+(a.vol?fmtP(a.margem):'—')+'</td>'
         +'<td style="'+TD+'right">'+(a.vol?'R$ '+fmtN(a.mrgUn):'—')+'</td>'
-        +'<td style="'+TD+'right">'+(a.vol?Math.round(a.dias)+' dias':'—')+'</td>'
-        +'</tr>';
+        +'<td style="'+TD+'right">'+(a.vol?Math.round(a.dias)+' dias':'—')+'</td></tr>';
     });
+    const T='color:#fff;border:none';
     html+='<tr style="background:#111;color:#fff;font-weight:700">'
-      +'<td style="'+TD+'left;color:#fff;border:none">Trimestre</td>'
-      +'<td style="'+TD+'right;color:#fff;border:none">'+(tri.vol||0)+'</td>'
-      +'<td style="'+TD+'right;color:#fff;border:none">'+(tri.tkm>0?'R$ '+fmtN(tri.tkm):'—')+'</td>'
-      +'<td style="'+TD+'center;color:#fff;border:none">'+(tri.vol?fmtP1(tri.fipe):'—')+'</td>'
-      +'<td style="'+TD+'center;color:#fff;border:none">'+(tri.vol?fmtP1(tri.pago):'—')+'</td>'
+      +'<td style="'+TD+'left;'+T+'">Trimestre</td>'
+      +'<td style="'+TD+'right;'+T+'">'+(tri.vol||0)+'</td>'
+      +'<td style="'+TD+'right;'+T+'">'+(tri.tkm>0?'R$ '+fmtN(tri.tkm):'—')+'</td>'
+      +'<td style="'+TD+'center;'+T+'">'+(tri.vol?fmtP1(tri.fipe):'—')+'</td>'
+      +'<td style="'+TD+'center;'+T+'">'+(tri.vol?fmtP1(tri.pago):'—')+'</td>'
       +'<td style="'+TD+'center;border:none;color:'+pCol(tri.margem)+'">'+(tri.vol?fmtP(tri.margem):'—')+'</td>'
-      +'<td style="'+TD+'right;color:#fff;border:none">'+(tri.vol?'R$ '+fmtN(tri.mrgUn):'—')+'</td>'
-      +'<td style="'+TD+'right;color:#fff;border:none">'+(tri.vol?Math.round(tri.dias)+' dias':'—')+'</td>'
-      +'</tr></tbody></table></div>';
+      +'<td style="'+TD+'right;'+T+'">'+(tri.vol?'R$ '+fmtN(tri.mrgUn):'—')+'</td>'
+      +'<td style="'+TD+'right;'+T+'">'+(tri.vol?Math.round(tri.dias)+' dias':'—')+'</td></tr></tbody></table></div>';
     if(linhas.length>1 && prim && ult && prim.vol && ult.vol){
-      html+='<div style="padding:7px 14px;font-size:11px;color:var(--muted);background:#f5f4f0">'
-        +'Do 1º ao último mês: volume '+(dVol>=0?'+':'')+dVol+' un. · % margem '+(dMrg>=0?'+':'')
-        +(dMrg*100).toFixed(2)+' p.p.</div>';
+      const dVol=ult.vol-prim.vol, dMrg=ult.margem-prim.margem;
+      html+='<div style="padding:7px 14px;font-size:11px;color:var(--muted);background:#f5f4f0">Do 1º ao último mês: volume '
+        +(dVol>=0?'+':'')+dVol+' un. · % margem '+(dMrg>=0?'+':'')+(dMrg*100).toFixed(2)+' p.p.</div>';
     }
     html+='</div>';
   });
 
   if(falhas.length) html+='<div style="font-size:11px;color:var(--amber)">Não consegui ler: '+falhas.join(', ')+'</div>';
-  if(alvo.length>1) html='<div style="font-size:11px;color:var(--muted);margin-bottom:8px">'+alvo.length+' modelos casaram com "'+termo+'".</div>'+html;
-  inp.innerHTML=html;
+  if(alvo.length>1) html='<div style="font-size:11px;color:var(--muted);margin-bottom:8px">'+alvo.length+' modelos'+(termo?' casaram com "'+termo+'"':' selecionados no filtro')+'.</div>'+html;
+  out.innerHTML=html;
 }
 
 // ── BUSCA POR PLACAS ──────────────────────────────────────────────────────────
